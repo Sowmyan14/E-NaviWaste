@@ -33,6 +33,10 @@ where = ["src"]
 testpaths = ["tests"]
 pythonpath = ["tests", "src"]
 addopts = "-m 'not slow'"
+filterwarnings = [
+    # supervision's own deprecation notice on import; not actionable here
+    "ignore:.*template_mgs.*:FutureWarning",
+]
 markers = [
     "slow: runs real models and needs weights/photos; skipped by default",
 ]

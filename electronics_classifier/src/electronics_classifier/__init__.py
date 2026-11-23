@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+import warnings
 from typing import Any
 
-from .schemas import ClassificationResult
+# supervision emits a deprecation notice for its own internal decorators on every import;
+# it is not actionable here. Only that message is hidden; other warnings are untouched.
+warnings.filterwarnings("ignore", message=".*template_mgs.*", category=FutureWarning)
+
+from .schemas import ClassificationResult  # noqa: E402
 
 __all__ = ["ClassificationResult", "ElectronicsClassificationPipeline"]
 

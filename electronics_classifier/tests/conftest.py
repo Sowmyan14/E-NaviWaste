@@ -128,3 +128,19 @@ def resolved_config() -> dict:
 @pytest.fixture
 def build_ctx(resolved_config: dict) -> BuildContext:
     return BuildContext.from_config({**resolved_config, "run": {"device": "cpu", "seed": 0}})
+
+
+VALID_REPLY = '{"brand": "TP-Link", "model": "Archer", "category": "router", "color": "black"}'
+
+
+def det(phrase="router", conf=0.9, box=(100, 100, 300, 300)) -> RawDetection:
+    return RawDetection(phrase=phrase, confidence=conf, bbox_xyxy=box)
+
+
+def make_pipeline(detections=None, replies=None, sets=(), presets=(), **components):
+    """A pipeline whose detector and VLM are scripted fakes (unless passed explicitly)."""
+    from electronics_classifier.pipeline import ElectronicsClassificationPipeline
+
+    components.setdefault("detector", FakeDetector(detections))
+    components.setdefault("vlm_client", FakeVLMClient(replies or [VALID_REPLY], cycle=True))
+    return ElectronicsClassificationPipeline(presets=presets, sets=sets, **components)
