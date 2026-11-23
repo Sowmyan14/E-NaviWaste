@@ -22,6 +22,10 @@ dependencies = [
 # default detector backend (Grounding DINO)
 dino = ["transformers", "torch"]
 vlm = ["transformers", "torch", "torchvision", "qwen-vl-utils"]
+# VLM through an OpenAI-compatible server: LM Studio, Ollama (local or cloud), vLLM, ...
+server = ["openai"]
+# OCR cross-check of VLM model names (the ocr_verify_model post-processor)
+ocr = ["rapidocr", "onnxruntime", "rapidfuzz"]
 sam = ["segment-anything"]
 sam2 = ["sam2"]
 dev = ["pytest", "ruff"]

@@ -137,10 +137,20 @@ def det(phrase="router", conf=0.9, box=(100, 100, 300, 300)) -> RawDetection:
     return RawDetection(phrase=phrase, confidence=conf, bbox_xyxy=box)
 
 
-def make_pipeline(detections=None, replies=None, sets=(), presets=(), **components):
+# The default config verifies VLM model names with OCR. Tests about other behaviour script VLM
+# replies that name a model on a synthetic image, which OCR (correctly) cannot confirm, so
+# `make_pipeline` switches the step off unless `ocr=True`.
+WITHOUT_OCR = (
+    "pipeline.attribute_postprocess="
+    "[{name: normalize_unknown, params: {max_len: 64}}, {name: category_vocab}]"
+)
+
+
+def make_pipeline(detections=None, replies=None, sets=(), presets=(), ocr=False, **components):
     """A pipeline whose detector and VLM are scripted fakes (unless passed explicitly)."""
     from electronics_classifier.pipeline import ElectronicsClassificationPipeline
 
     components.setdefault("detector", FakeDetector(detections))
     components.setdefault("vlm_client", FakeVLMClient(replies or [VALID_REPLY], cycle=True))
+    sets = list(sets) if ocr else [WITHOUT_OCR, *sets]  # a later --set still wins
     return ElectronicsClassificationPipeline(presets=presets, sets=sets, **components)

@@ -59,6 +59,7 @@ pipeline:
 
   attribute_postprocess:
     - {name: normalize_unknown, params: {max_len: 64}}
+    - {name: ocr_verify_model}            # model names are kept only if OCR can read them (loaded lazily)
     - {name: category_vocab}              # out-of-vocab category -> "electronic device" + CATEGORY_OUT_OF_VOCAB
 
   warning_rules:
