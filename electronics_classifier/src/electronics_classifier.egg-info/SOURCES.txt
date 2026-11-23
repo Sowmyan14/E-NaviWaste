@@ -12,5 +12,12 @@ src/electronics_classifier.egg-info/dependency_links.txt
 src/electronics_classifier.egg-info/requires.txt
 src/electronics_classifier.egg-info/top_level.txt
 src/electronics_classifier/components/__init__.py
+src/electronics_classifier/components/detection_filters.py
+src/electronics_classifier/components/image_preprocess.py
+src/electronics_classifier/components/detectors/__init__.py
+src/electronics_classifier/components/detectors/fake.py
+src/electronics_classifier/components/detectors/grounding_dino.py
 tests/test_config_layering.py
+tests/test_detection_filters.py
+tests/test_image_preprocess.py
 tests/test_registry.py
