@@ -46,6 +46,7 @@ class WarningCode(str, Enum):  # built-in codes; custom rules may emit any other
     PARTIALLY_OCCLUDED_OR_OVERLAPPING = "PARTIALLY_OCCLUDED_OR_OVERLAPPING"
     SEGMENTATION_FAILED = "SEGMENTATION_FAILED"  # approved for segmentation, but no usable mask
     CATEGORY_MISMATCH = "CATEGORY_MISMATCH"  # detector phrase and VLM category disagree
+    MODEL_UNVERIFIED = "MODEL_UNVERIFIED"  # the VLM named a model that OCR could not find
 
 
 class ClassifiedItem(BaseModel):

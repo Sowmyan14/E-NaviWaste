@@ -3,8 +3,9 @@
 Tier A (a01..a34): hostile input/output the system must survive. All pass.
 Tier B (b01..b08): known design weaknesses; each asserts the IDEAL behaviour and is a strict
 xfail. Do not weaken a Tier B assertion: when a weakness is fixed the test turns into an XPASS,
-which fails the run on purpose so the marker gets removed. B05 has been fixed that way (the
-`category_mismatch` rule), so 7 strict xfails remain; its test is now a plain regression test.
+which fails the run on purpose so the marker gets removed. B05 (`category_mismatch` rule) and
+B06 (`ocr_verify_model`) have been fixed that way, so 6 strict xfails remain; their tests are now
+plain regression tests.
 Tier C (real models and photos) lives in tests/slow/.
 """
 
@@ -42,8 +43,8 @@ ONE = [det("router", 0.9, (100, 100, 300, 300))]
 FOUR = ["brand", "model", "category", "color"]
 
 
-def run_one(replies, image=IMAGE, sets=(), detections=ONE):
-    pipeline = make_pipeline(detections, replies, sets=sets)
+def run_one(replies, image=IMAGE, sets=(), detections=ONE, ocr=False):
+    pipeline = make_pipeline(detections, replies, sets=sets, ocr=ocr)
     annotated, result = pipeline.run(image)
     return pipeline, annotated, result
 
@@ -550,11 +551,12 @@ def test_b05_detector_router_versus_vlm_smart_speaker_gets_a_mismatch_warning():
     assert "CATEGORY_MISMATCH" in result.items[0].warnings
 
 
-@pytest.mark.xfail(strict=True, reason="KNOWN-B06: nothing verifies VLM claims against visible "
-                   "evidence. Fix: add an OCR cross-check `attribute_postprocess` step.")
+# B06 was fixed by the `ocr_verify_model` post-processor (on in the default config): the strict
+# xfail was removed when the test started passing. It runs with the default pipeline (`ocr=True`),
+# and holds whether or not RapidOCR is installed (without it, claims are reported unverified).
 def test_b06_a_model_claimed_for_a_blank_gray_crop_is_unknown_or_flagged():
     gray = np.full((480, 640, 3), 128, dtype=np.uint8)
-    _, _, result = run_one([reply(model="XR-5000")], image=gray)
+    _, _, result = run_one([reply(model="XR-5000")], image=gray, ocr=True)
     item = result.items[0]
     assert item.attributes.model == "unknown" or "MODEL_UNVERIFIED" in item.warnings
 
@@ -578,8 +580,8 @@ def test_b08_the_same_device_appearing_twice_flags_the_second_as_a_likely_duplic
 
 
 def test_the_expected_tier_a_and_b_inventory():
-    """Guards the counts: 34 Tier A ids (A01-A34); Tier B ids B01-B08, of which 7 are still
-    strict xfails (B05 was fixed and promoted to a normal test)."""
+    """Guards the counts: 34 Tier A ids (A01-A34); Tier B ids B01-B08, of which 6 are still
+    strict xfails (B05 and B06 were fixed and promoted to normal tests)."""
     import re
     from pathlib import Path
 
@@ -588,5 +590,5 @@ def test_the_expected_tier_a_and_b_inventory():
     b_ids = {int(m) for m in re.findall(r"^def test_b(\d\d)_", source, flags=re.M)}
     assert a_ids == set(range(1, 35))
     assert b_ids == set(range(1, 9))
-    assert len(re.findall(r"^@pytest\.mark\.xfail\(strict=True", source, flags=re.M)) == 7
+    assert len(re.findall(r"^@pytest\.mark\.xfail\(strict=True", source, flags=re.M)) == 6
     assert load_config() and build and Image  # imports used above stay referenced

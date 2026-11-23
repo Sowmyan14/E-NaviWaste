@@ -440,3 +440,438 @@ def test_transformers_client_samples_only_when_temperature_is_positive():
     assert client._model.kwargs["do_sample"] is True
     assert client._model.kwargs["temperature"] == 0.7
     assert client._model.kwargs["max_new_tokens"] == 32
+
+
+# --- openai_compatible client: real SDK, real HTTP, against a tiny local mock server -------
+
+import base64  # noqa: E402
+import builtins  # noqa: E402
+import io  # noqa: E402
+import socket  # noqa: E402
+import threading  # noqa: E402
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer  # noqa: E402
+
+from electronics_classifier.assembler import result_to_json  # noqa: E402,F401
+from electronics_classifier.config import dump_yaml  # noqa: E402
+from electronics_classifier.pipeline import ElectronicsClassificationPipeline  # noqa: E402
+
+REPLY_JSON = '{"brand": "Acme", "model": "unknown", "category": "router", "color": "black"}'
+
+
+class MockServer:
+    """An OpenAI-compatible server (models list + chat completions) on 127.0.0.1."""
+
+    def __init__(self):
+        self.reply: str | None = REPLY_JSON
+        self.models = ["mock-vlm"]
+        self.fail_status = 0  # every chat request answers with this HTTP status
+        self.fail_first = 0  # only the first N chat requests fail (with 429)
+        self.chats: list[dict] = []  # recorded chat requests: {"headers": ..., "body": ...}
+        outer = self
+
+        class Handler(BaseHTTPRequestHandler):
+            def log_message(self, *args):
+                pass
+
+            def _send(self, status, payload):
+                data = json.dumps(payload).encode()
+                self.send_response(status)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+
+            def do_GET(self):
+                data = [{"id": m, "object": "model", "created": 0, "owned_by": "mock"}
+                        for m in outer.models]  # fmt: skip
+                self._send(200, {"object": "list", "data": data})
+
+            def do_POST(self):
+                body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+                headers = {k.lower(): v for k, v in self.headers.items()}
+                outer.chats.append({"headers": headers, "body": body})
+                if outer.fail_status:
+                    return self._send(outer.fail_status, {"error": {"message": "boom"}})
+                if len(outer.chats) <= outer.fail_first:
+                    return self._send(429, {"error": {"message": "slow down"}})
+                message = {"role": "assistant", "content": outer.reply}
+                self._send(200, {
+                    "id": "x", "object": "chat.completion", "created": 0, "model": "mock-vlm",
+                    "choices": [{"index": 0, "message": message, "finish_reason": "stop"}],
+                })  # fmt: skip
+
+        self._server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self.url = f"http://127.0.0.1:{self._server.server_address[1]}/v1"
+        threading.Thread(target=self._server.serve_forever, daemon=True).start()
+
+    def close(self):
+        self._server.shutdown()
+        self._server.server_close()
+
+
+@pytest.fixture
+def server():
+    mock = MockServer()
+    yield mock
+    mock.close()
+
+
+def make_client(url, **params):
+    spec = {"name": "openai_compatible", "params": {"base_url": url, "model": "mock-vlm", **params}}
+    return build("vlm_client", spec, BuildContext(CATEGORIES, "cpu", 0), path="pipeline.vlm.client")
+
+
+def test_openai_client_sends_lossless_pngs_crop_first_and_returns_the_reply(server):
+    client = make_client(server.url)
+    crop, scene = make_image("noise", 40, 60), make_image("gradient", 30, 50)
+    assert client.generate("SYSTEM TEXT", [crop, scene], "USER TEXT") == REPLY_JSON
+
+    body = server.chats[0]["body"]
+    assert (body["model"], body["temperature"], body["max_tokens"]) == ("mock-vlm", 0.0, 256)
+    system, user = body["messages"]
+    assert system == {"role": "system", "content": "SYSTEM TEXT"}
+    assert [part["type"] for part in user["content"]] == ["image_url", "image_url", "text"]
+    assert user["content"][2]["text"] == "USER TEXT"
+    from PIL import Image
+
+    for part, original in zip(user["content"][:2], (crop, scene), strict=True):
+        prefix, payload = part["image_url"]["url"].split(",", 1)
+        assert prefix == "data:image/png;base64"
+        decoded = np.array(Image.open(io.BytesIO(base64.b64decode(payload))))
+        assert (decoded == original).all()  # lossless: small label text survives the trip
+
+
+def test_no_key_for_local_servers_and_a_key_from_the_environment_otherwise(server, monkeypatch):
+    tiny = [make_image("noise", 8, 8)]
+    make_client(server.url).generate("s", tiny, "u")
+    assert server.chats[-1]["headers"]["authorization"] == "Bearer not-needed"
+    monkeypatch.setenv("MY_VLM_KEY", "sekret-123")
+    make_client(server.url, api_key_env="MY_VLM_KEY").generate("s", tiny, "u")
+    assert server.chats[-1]["headers"]["authorization"] == "Bearer sekret-123"
+
+
+def test_the_api_key_never_appears_in_params_the_resolved_config_or_errors(server, monkeypatch):
+    monkeypatch.setenv("MY_VLM_KEY", "sekret-123")
+    client = make_client(server.url, api_key_env="MY_VLM_KEY")
+    assert "sekret-123" not in repr(client.params)
+    assert "sekret-123" not in str(client.params.model_dump())
+
+    pipeline = ElectronicsClassificationPipeline(
+        sets=[
+            "pipeline.detector.name=fake",
+            "pipeline.vlm.client={name: openai_compatible, params: "
+            f"{{base_url: '{server.url}', model: mock-vlm, api_key_env: MY_VLM_KEY}}}}",
+        ]
+    )
+    assert "sekret-123" not in dump_yaml(pipeline.config)  # what resolved_config.yaml contains
+    assert "MY_VLM_KEY" in dump_yaml(pipeline.config)  # only the variable NAME is recorded
+
+    monkeypatch.delenv("MY_VLM_KEY")
+    expected = r"pipeline\.vlm\.client\.params\.api_key_env.*MY_VLM_KEY"
+    with pytest.raises(ConfigError, match=expected):
+        make_client(server.url, api_key_env="MY_VLM_KEY")
+    monkeypatch.setenv("MY_VLM_KEY", "")
+    with pytest.raises(ConfigError, match="not set or empty"):
+        make_client(server.url, api_key_env="MY_VLM_KEY")
+
+
+def test_build_time_check_reports_an_unreachable_server_and_a_missing_model(server):
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        dead_port = probe.getsockname()[1]  # nothing listens here once the socket closes
+    with pytest.raises(ConfigError, match=r"params\.base_url: cannot reach a model server"):
+        make_client(f"http://127.0.0.1:{dead_port}/v1")
+
+    server.models = ["other-a", "other-b"]
+    with pytest.raises(ConfigError, match=r"params\.model: 'mock-vlm' is not available.*other-a"):
+        make_client(server.url)
+    assert make_client(server.url, check_server=False)  # the escape hatch skips both checks
+    server.models = []  # a server that lists nothing is accepted
+    assert make_client(server.url)
+
+
+def test_bad_urls_and_params_are_config_errors_naming_the_path():
+    for bad_url in ("localhost:1234", "ftp://x/v1", "", "http://"):
+        with pytest.raises(ConfigError, match=r"pipeline\.vlm\.client\.params\.base_url"):
+            make_client(bad_url, check_server=False)
+    invalid = (("temperature", -1), ("max_tokens", 0), ("timeout_s", 0), ("max_retries", -1))
+    for field, value in invalid:
+        with pytest.raises(ConfigError, match=rf"params\.{field}"):
+            make_client("http://127.0.0.1:1/v1", check_server=False, **{field: value})
+    spec = {"name": "openai_compatible", "params": {}}  # model is required
+    with pytest.raises(ConfigError, match=r"params\.model"):
+        build("vlm_client", spec, BuildContext(CATEGORIES, "cpu", 0), path="pipeline.vlm.client")
+
+
+def test_a_warning_names_the_host_when_images_leave_this_machine(server, caplog):
+    with caplog.at_level(logging.WARNING):
+        make_client(server.url)  # 127.0.0.1: nothing leaves the machine
+        assert not [r for r in caplog.records if "sends crops" in r.message]
+        make_client("https://models.example.test/v1", check_server=False)
+    warnings = [r.message for r in caplog.records if "sends crops" in r.message]
+    assert warnings == ["openai_compatible sends crops and context images to models.example.test"]
+
+
+def test_requests_are_retried_on_429_and_http_errors_become_a_parse_failed_fallback(server):
+    server.fail_first = 1  # first chat request: HTTP 429, then success
+    client = make_client(server.url, max_retries=2)
+    assert client.generate("s", [make_image("noise", 8, 8)], "u") == REPLY_JSON
+    assert len(server.chats) == 2
+
+    server.chats.clear()
+    server.fail_status = 500
+    extractor = AttributeExtractor(make_client(server.url, max_retries=0), CATEGORIES, None, 1)
+    result = extractor.extract(make_prepared_item())
+    assert result.warnings == ["VLM_PARSE_FAILED"] and len(server.chats) == 1  # no retry on error
+    assert result.attributes["category"] == FALLBACK_CATEGORY
+
+
+def test_an_empty_reply_is_a_parse_failure_not_a_crash(server):
+    server.reply = None  # the server answers with `content: null`
+    extractor = AttributeExtractor(make_client(server.url), CATEGORIES, None, 0)
+    assert extractor.extract(make_prepared_item()).warnings == ["VLM_PARSE_FAILED"]
+
+
+def test_the_pipeline_runs_end_to_end_through_the_server(server):
+    sets = [
+        "pipeline.detector.name=fake",
+        "pipeline.vlm.client={name: openai_compatible, params: "
+        f"{{base_url: '{server.url}', model: mock-vlm}}}}",
+    ]
+    pipeline = ElectronicsClassificationPipeline(sets=sets)
+    _, result = pipeline.run(make_image("noise", 480, 640))
+    [item] = result.items
+    assert item.attributes.brand == "Acme" and item.attributes.model == "unknown"
+    assert "MODEL_UNKNOWN" in item.warnings and "CATEGORY_MISMATCH" not in item.warnings
+    assert result.meta.components["vlm_client"] == "openai_compatible"
+    [chat] = server.chats  # one request per item, with the crop and the scene
+    assert sum(p["type"] == "image_url" for p in chat["body"]["messages"][1]["content"]) == 2
+    system_prompt = chat["body"]["messages"][0]["content"]
+    assert '"router"' in system_prompt and "model" in system_prompt  # the vocabulary prompt
+
+
+def test_a_missing_openai_package_carries_an_install_hint(server, monkeypatch):
+    real_import = builtins.__import__
+
+    def fake_import(name, *args, **kwargs):
+        if name == "openai" or name.startswith("openai."):
+            raise ImportError("No module named 'openai'")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+    with pytest.raises(ImportError, match=r"electronics-classifier\[server\]"):
+        make_client(server.url)
+
+
+# --- ocr_verify_model: a claimed model name must be visible in the crop ---------------------
+
+import cv2  # noqa: E402
+
+from electronics_classifier.components.attribute_postprocess import (  # noqa: E402
+    OcrVerifyModel,
+    RapidOcrReader,
+    model_is_visible,
+    normalize_for_match,
+)
+
+pytest.importorskip("rapidfuzz", reason="matching needs: pip install electronics-classifier[ocr]")
+
+
+class FakeReader:
+    def __init__(self, text):
+        self.text = text
+        self.reads = 0
+
+    def read(self, image):
+        self.reads += 1
+        return self.text
+
+
+def ocr_step(text="", available=True, **params):
+    """An OcrVerifyModel whose OCR engine is a fake that 'reads' ``text``."""
+    made = []
+
+    class Step(OcrVerifyModel):
+        def _make_reader(self):
+            made.append(1)
+            if not available:
+                raise ImportError("No module named 'rapidocr'")
+            return FakeReader(text)
+
+    return Step(Step.Params(**params), BuildContext(CATEGORIES, "cpu", 0)), made
+
+
+def verify(step, model):
+    return step.apply({"brand": "Acme", "model": model, "category": "router"}, item_ctx())
+
+
+def test_ocr_is_not_called_or_even_loaded_when_there_is_no_model_claim():
+    step, made = ocr_step("anything")
+    for claim in ("unknown", "N/A", "none", "  ", None):
+        attrs, warnings = verify(step, claim)
+        assert warnings == [] and attrs["brand"] == "Acme"
+    assert made == []  # not needed, so the engine was never created
+
+
+def test_a_visible_model_is_kept_and_the_engine_is_loaded_once_and_reused():
+    step, made = ocr_step("TP-Link Archer AX50 Wi-Fi 6 Router")
+    attrs, warnings = verify(step, "Archer AX50")
+    assert (attrs["model"], warnings) == ("Archer AX50", [])
+    verify(step, "AX50")
+    assert len(made) == 1 and step._reader.reads == 2
+
+
+@pytest.mark.parametrize(
+    "claimed,seen",
+    [
+        ("XR-5000", "model xr 5000 made in china"),
+        ("xr5000", "XR-5000"),
+        ("Archer AX50", "ARCHER-AX50"),
+    ],
+)
+def test_matching_ignores_case_spacing_and_punctuation(claimed, seen):
+    assert model_is_visible(claimed, seen, 85.0)
+
+
+def test_a_model_that_cannot_be_found_becomes_unknown_with_a_warning():
+    step, _ = ocr_step("Made in China  Input 12V 1A")
+    original = {"brand": "Apple", "model": "MacBook Pro", "category": "laptop"}
+    attrs, warnings = step.apply(original, item_ctx())
+    assert attrs == {"brand": "Apple", "model": "unknown", "category": "laptop"}
+    assert warnings == ["MODEL_UNVERIFIED"] and original["model"] == "MacBook Pro"  # input intact
+
+
+def test_blank_ocr_output_verifies_nothing():
+    step, _ = ocr_step("")
+    assert verify(step, "XR-5000") == (
+        {"brand": "Acme", "model": "unknown", "category": "router"}, ["MODEL_UNVERIFIED"]
+    )
+
+
+def test_a_fragment_of_the_claim_does_not_verify_it():
+    assert not model_is_visible("XR-5000", "XR5", 85.0)  # OCR saw only part of the claim
+    assert model_is_visible("XR5", "XR-5000", 85.0)  # but a short claim inside longer text is fine
+
+
+def test_short_names_must_match_exactly_but_long_names_tolerate_ocr_slips():
+    assert model_is_visible("A1", "model A1", 85.0)
+    assert not model_is_visible("A1", "model AI", 85.0)  # one wrong character: rejected
+    assert model_is_visible("Archer AX50", "ARCHER AX5O", 85.0)  # 0 read as O: accepted
+    assert not model_is_visible("Archer AX50", "ARCHER AX5O", 100.0)  # unless made strict
+    assert normalize_for_match("xr-5000 !") == "XR5000"
+
+
+def test_without_rapidocr_claims_are_reported_unverified_with_one_warning(caplog):
+    step, made = ocr_step(available=False)
+    with caplog.at_level(logging.WARNING):
+        first = verify(step, "XR-5000")
+        second = verify(step, "AX50")
+    for attrs, warnings in (first, second):
+        assert attrs["model"] == "unknown" and warnings == ["MODEL_UNVERIFIED"]
+    assert len(made) == 1  # tried once, then remembered
+    notices = [r for r in caplog.records if "RapidOCR is not installed" in r.message]
+    assert len(notices) == 1 and "electronics-classifier[ocr]" in notices[0].message
+    assert verify(step, "unknown")[1] == []  # nothing to verify, nothing flagged
+
+
+def test_if_unavailable_error_fails_when_the_pipeline_is_built():
+    with pytest.raises(ImportError, match=r"electronics-classifier\[ocr\]"):
+        ocr_step(available=False, if_unavailable="error")
+
+
+def test_ocr_params_are_validated(build_ctx):
+    for params, field in (
+        ({"min_confidence": 2}, "min_confidence"),
+        ({"min_match": 101}, "min_match"),
+        ({"if_unavailable": "ignore"}, "if_unavailable"),
+        ({"surprise": 1}, "surprise"),
+    ):
+        with pytest.raises(ConfigError, match=rf"params\.{field}"):
+            post(build_ctx, "ocr_verify_model", **params)
+
+
+def test_the_reader_filters_low_confidence_lines_and_passes_opencv_colour_order():
+    seen = {}
+
+    class Engine:
+        def __call__(self, image):
+            seen["image"] = image
+            return type("R", (), {"txts": ("GOOD", "noise", "OK"), "scores": (0.9, 0.2, 0.5)})()
+
+    reader = RapidOcrReader(0.5, engine=Engine())
+    rgb = np.zeros((2, 2, 3), np.uint8)
+    rgb[..., 0] = 200  # pure red in RGB
+    assert reader.read(rgb) == "GOOD OK"  # the 0.2 line is dropped, 0.5 is kept
+    assert seen["image"][0, 0].tolist() == [0, 0, 200]  # the engine got BGR
+
+    empty = type("R", (), {"txts": None, "scores": None})()
+    assert RapidOcrReader(0.5, engine=lambda image: empty).read(rgb) == ""
+
+
+def label_crop(*lines):
+    image = np.full((90 * len(lines) + 30, 700, 3), 235, np.uint8)
+    for row, text in enumerate(lines):
+        origin = (20, 70 + 90 * row)
+        cv2.putText(image, text, origin, cv2.FONT_HERSHEY_SIMPLEX, 1.8, (20, 20, 20), 3)
+    return image
+
+
+def test_the_real_rapidocr_engine_verifies_printed_text_and_rejects_the_rest(build_ctx):
+    pytest.importorskip("rapidocr", reason="needs: pip install electronics-classifier[ocr]")
+    step = post(build_ctx, "ocr_verify_model")
+    printed = make_prepared_item()
+    printed.crop_rgb[...] = 0  # replace the noise crop with a real label
+    label = label_crop("TP-Link", "Archer AX50")
+    printed = printed.model_copy(update={"crop_rgb": label})
+    ctx = ItemContext(printed, 0, [printed.detection], 300, 200)
+
+    assert step.apply({"model": "Archer AX50"}, ctx) == ({"model": "Archer AX50"}, [])
+    assert step.apply({"model": "XR-5000"}, ctx) == ({"model": "unknown"}, ["MODEL_UNVERIFIED"])
+    blank = printed.model_copy(update={"crop_rgb": np.full((200, 200, 3), 128, np.uint8)})
+    blank_ctx = ItemContext(blank, 0, [blank.detection], 300, 200)
+    expected = ({"model": "unknown"}, ["MODEL_UNVERIFIED"])
+    assert step.apply({"model": "XR-5000"}, blank_ctx) == expected
+
+
+def test_ocr_verification_is_on_by_default_and_only_loads_when_a_model_is_claimed(monkeypatch):
+    from conftest import make_pipeline
+
+    from electronics_classifier.config import load_config
+
+    names = [step["name"] for step in load_config()["pipeline"]["attribute_postprocess"]]
+    assert names == ["normalize_unknown", "ocr_verify_model", "category_vocab"]
+
+    def must_not_load(self, *args, **kwargs):
+        raise AssertionError("the OCR engine was loaded although no model was claimed")
+
+    monkeypatch.setattr(RapidOcrReader, "__init__", must_not_load)
+    no_model = '{"brand": "Acme", "model": "unknown", "category": "router", "color": "black"}'
+    pipeline = make_pipeline([det_box()], [no_model], ocr=True)
+    _, result = pipeline.run(make_image("noise", 480, 640))
+    assert result.items[0].attributes.model == "unknown"
+    assert "MODEL_UNVERIFIED" not in result.items[0].warnings
+
+
+def det_box():
+    from conftest import det
+
+    return det("router", 0.9, (100, 100, 400, 300))
+
+
+def test_the_default_pipeline_keeps_a_visible_model_and_rejects_an_invented_one():
+    pytest.importorskip("rapidocr", reason="needs: pip install electronics-classifier[ocr]")
+    from conftest import make_pipeline
+
+    image = make_image("solid", 480, 640)
+    image[100:300, 100:640] = label_crop("TP-Link", "Archer AX50")[:200, :540]
+    real = '{"brand": "TP-Link", "model": "Archer AX50", "category": "router", "color": "black"}'
+    fake = '{"brand": "TP-Link", "model": "XR-5000", "category": "router", "color": "black"}'
+    det_ = [det_box()]
+
+    _, kept = make_pipeline(det_, [real], ocr=True).run(image)
+    assert kept.items[0].attributes.model == "Archer AX50"
+    assert "MODEL_UNVERIFIED" not in kept.items[0].warnings
+
+    _, rejected = make_pipeline(det_, [fake], ocr=True).run(image)
+    assert rejected.items[0].attributes.model == "unknown"
+    assert rejected.items[0].warnings[:2] == ["MODEL_UNVERIFIED", "MODEL_UNKNOWN"]

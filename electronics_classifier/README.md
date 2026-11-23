@@ -26,7 +26,9 @@ Python 3.10 to 3.12.
 ```bash
 pip install -e .            # core: numpy, opencv, Pillow, pydantic, pyyaml, supervision
 pip install -e '.[dino]'    # default detector (Grounding DINO): transformers, torch
-pip install -e '.[vlm]'     # default VLM client: transformers, torch, qwen-vl-utils
+pip install -e '.[vlm]'     # default VLM client: transformers, torch, torchvision, qwen-vl-utils
+pip install -e '.[server]'  # VLM through LM Studio / Ollama / any OpenAI-compatible server
+pip install -e '.[ocr]'     # RapidOCR: lets the model-name check read text in the crops
 pip install -e '.[sam]'     # optional SAM masks (segment-anything)
 pip install -e '.[sam2]'    # optional SAM 2 masks (alternative to `sam`)
 pip install -e '.[dev]'     # pytest, ruff
@@ -101,9 +103,9 @@ One YAML file describes the whole run: `config/pipeline.yaml`. Its sections mirr
 | `pipeline.segmenter` / `segmentation_gate` | `none` (default), `sam`, `sam2`; the gate (`always`, `overlap`) picks which items get a mask |
 | `pipeline.crop` | `padding_ratio`, `include_full_image_context`, `max_image_side_px` |
 | `pipeline.crop_transforms` | Ordered: `identity`, `upscale_min_side`, `sharpen`, `clahe` |
-| `pipeline.vlm` | `client` (`transformers`, `fake`), `max_retries`, `system_prompt_file` (a template containing `{categories}`) |
-| `pipeline.attribute_postprocess` | Ordered: `normalize_unknown`, `category_vocab`, `brand_aliases` |
-| `pipeline.warning_rules` | Ordered: `unknown_field`, `low_detector_confidence`, `small_crop`, `overlap`, `category_oov` |
+| `pipeline.vlm` | `client` (`transformers`, `openai_compatible`, `fake`), `max_retries`, `system_prompt_file` (a template containing `{categories}`) |
+| `pipeline.attribute_postprocess` | Ordered: `normalize_unknown`, `ocr_verify_model`, `category_vocab`, `brand_aliases` |
+| `pipeline.warning_rules` | Ordered: `unknown_field`, `low_detector_confidence`, `small_crop`, `overlap`, `category_mismatch`, `category_oov` |
 | `rendering` | `output_format`, `label_template`, `stroke_scale`, `font_scale`, `mask_alpha` |
 
 `list-components` prints every component with its parameters, defaults and descriptions.
@@ -144,6 +146,33 @@ component names) in `result.json`, so any output can be reproduced and compared.
 |---|---|
 | `fast` | Smaller VLM (`Qwen/Qwen2-VL-2B-Instruct`, 128 new tokens), `resize_max_side` 960, `top_k` 10, no SAM |
 | `accurate_sam` | SAM `vit_b` masks for overlapping items and `padding_ratio` 0.25. You must download the checkpoint to `checkpoints/sam_vit_b_01ec64.pth` (or override the path); building fails with a clear `ConfigError` until it exists |
+
+### Using a model server instead of an in-process model
+
+The `openai_compatible` VLM client calls any server that speaks the OpenAI chat API, so the
+model runs outside Python (often quantized, which lets a 16 GB machine run larger models):
+
+```yaml
+pipeline:
+  vlm:
+    client:
+      name: openai_compatible
+      params:
+        base_url: "http://localhost:1234/v1"   # LM Studio; local Ollama is http://localhost:11434/v1
+        model: "qwen3-vl-4b-instruct"           # exactly as the server lists it
+```
+
+- **Check at build time:** the client verifies the server answers and lists the model, and
+  raises a `ConfigError` naming the URL otherwise (`check_server: false` skips this for servers
+  without a model list). Requests are retried with backoff on connection errors, 429 and 5xx.
+- **Cloud servers** (for example Ollama cloud, `base_url: "https://ollama.com/v1"`) need an API
+  key. Put the **name** of an environment variable in `api_key_env` (for example
+  `OLLAMA_API_KEY`), never the key: `resolved_config.yaml` is written to disk on every run.
+- **Privacy:** crops and the context image are sent to the server. A warning names the host
+  whenever it is not this machine. Only pixel data is sent, so EXIF and GPS metadata never
+  leave your computer. Cloud use is always an explicit choice, never an automatic fallback.
+- Prompt wording, parsing, retries and warnings are identical for every client, so only the
+  model changes. The model name is part of the config and therefore of `meta.config_hash`.
 
 ## How to add or swap a component
 
@@ -198,8 +227,10 @@ device, the seed and the read-only resolved config.
   OpenCV cannot draw with `?`.
 
 Warning codes: `BRAND_UNKNOWN`, `MODEL_UNKNOWN`, `COLOR_UNKNOWN`, `LOW_DETECTOR_CONFIDENCE`,
-`CATEGORY_OUT_OF_VOCAB`, `VLM_PARSE_FAILED`, `SMALL_CROP`, `PARTIALLY_OCCLUDED_OR_OVERLAPPING`
-and `SEGMENTATION_FAILED` (an item the gate chose for a mask ended up without one, so its crop
+`MODEL_UNVERIFIED` (the VLM named a model that OCR could not find in the crop),
+`CATEGORY_OUT_OF_VOCAB`, `CATEGORY_MISMATCH` (the detector's phrase and the VLM's category are two
+different specific categories), `VLM_PARSE_FAILED`, `SMALL_CROP`,
+`PARTIALLY_OCCLUDED_OR_OVERLAPPING` and `SEGMENTATION_FAILED` (an item the gate chose for a mask ended up without one, so its crop
 is the plain rectangle). A single item's trouble never aborts a run: a failed VLM call or an
 unparseable reply gives all-`unknown` attributes plus `VLM_PARSE_FAILED`.
 
@@ -224,10 +255,12 @@ ruff check src tests
 
 - **Tier A** (`test_failure_modes.py`, A01 to A34): hostile input or output the system must
   survive. All pass.
-- **Tier B** (B01 to B08, same file): known design weaknesses. Each asserts the *ideal*
+- **Tier B** (B01 to B08, same file): known design weaknesses (B05 and B06 are fixed). Each asserts the *ideal*
   behaviour and is `xfail(strict=True)`; the reason names the suggested fix. When a weakness
   is fixed the test becomes an XPASS and fails the run on purpose, so the marker gets removed.
-  Expected result: **8 xfailed**.
+  Expected result: **6 xfailed** (B05 and B06 were fixed, by the `category_mismatch` rule and
+  the `ocr_verify_model` step, so their strict xfails were removed and they are now normal
+  regression tests).
 - **Tier C** (`tests/slow/`, C01 to C14): real-model failures, informational only. Photos
   cannot be generated, so `tests/fixtures/failure_images/README.md` lists every file needed;
   a test whose photo is missing is skipped with the file name.
@@ -256,6 +289,18 @@ These points were not fixed by the plan and were decided with the maintainer:
 - Both `sam` and `sam2` are real segmenters behind one interface (`pip install -e '.[sam]'`
   or `'.[sam2]'`), but they, and the real `transformers` VLM client, are verified in this
   repository only against stub models, not against real weights.
+- `category_mismatch` is on by default: it flags an item whose detector phrase and VLM category
+  are two different specific categories (a generic `electronic device` on either side is not
+  flagged). The prompt also tells the VLM to answer `unknown` for the model unless the exact
+  name or number is printed on the device.
+- `ocr_verify_model` is on by default and keeps a model name only if RapidOCR can find it in
+  the crop (case, spacing and punctuation are ignored; names of 5+ characters tolerate
+  small OCR slips, shorter ones must match exactly). Otherwise the model becomes `unknown`
+  with `MODEL_UNVERIFIED`. It is **lazy**: OCR runs only for items where the VLM claimed a
+  model, and the engine loads on first use, so a run with no claims never touches it. Without
+  the `ocr` extra, claims are reported unverified with a one-time warning (set
+  `if_unavailable: error` to fail at build time instead). Brands are not checked this way,
+  because a brand can be read from a logo, which is not text.
 - The repository's own license is **MIT**.
 
 ## Licensing
@@ -265,5 +310,9 @@ These points were not fixed by the plan and were decided with the maintainer:
   (Apache-2.0).
 - **YOLO-World / Ultralytics is deliberately not included**: Ultralytics is AGPL-3.0 and would
   impose AGPL obligations on a combined work. Nothing here imports it.
+- The optional `ocr` extra: `rapidocr` (Apache-2.0, with bundled PaddleOCR-derived models also
+  under Apache-2.0), `onnxruntime` (MIT) and `rapidfuzz` (MIT).
+- The optional `openai` package (Apache-2.0) is only an HTTP client for model servers. A hosted
+  model is also subject to its provider's terms and privacy policy.
 - Model weights have their own licenses. **Verify the license of the VLM weights you choose
   (for example Qwen2.5-VL or Qwen2-VL) and of the SAM weights before distributing anything.**

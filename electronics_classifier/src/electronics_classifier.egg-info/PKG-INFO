@@ -19,6 +19,8 @@ Requires-Dist: transformers; extra == "vlm"
 Requires-Dist: torch; extra == "vlm"
 Requires-Dist: torchvision; extra == "vlm"
 Requires-Dist: qwen-vl-utils; extra == "vlm"
+Provides-Extra: server
+Requires-Dist: openai; extra == "server"
 Provides-Extra: sam
 Requires-Dist: segment-anything; extra == "sam"
 Provides-Extra: sam2

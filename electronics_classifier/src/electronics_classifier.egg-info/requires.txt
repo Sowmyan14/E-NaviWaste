@@ -19,6 +19,9 @@ segment-anything
 [sam2]
 sam2
 
+[server]
+openai
+
 [vlm]
 transformers
 torch
