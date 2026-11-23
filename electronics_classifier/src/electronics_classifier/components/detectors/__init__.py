@@ -1,0 +1,1 @@
+"""Detector backends (kind ``detector``)."""

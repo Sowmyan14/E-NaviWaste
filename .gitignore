@@ -1,0 +1,16 @@
+# macOS
+.DS_Store
+
+# Python caches
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# Model weights (never commit weights)
+*.pt
+*.pth
+*.bin
+*.safetensors
+*.ckpt
+*.onnx
