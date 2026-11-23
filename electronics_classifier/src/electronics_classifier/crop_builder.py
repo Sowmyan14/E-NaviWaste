@@ -10,8 +10,9 @@ import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-import cv2
 import numpy as np
+import supervision as sv
+from PIL import Image
 
 from .components.segmenters import NoSegmenter
 from .config import CropConfig
@@ -74,24 +75,21 @@ def segmentation_warnings(
 def pad_and_clamp(bbox: BBox, padding_ratio: float, image_w: int, image_h: int) -> BBox:
     """Expand by ``padding_ratio`` of the box width/height per side, clamp, keep >= 1 px."""
     x1, y1, x2, y2 = bbox
-    pad_x = round((x2 - x1) * padding_ratio)
-    pad_y = round((y2 - y1) * padding_ratio)
-    nx1 = min(max(x1 - pad_x, 0), image_w - 1)
-    ny1 = min(max(y1 - pad_y, 0), image_h - 1)
-    nx2 = min(max(x2 + pad_x, nx1 + 1), image_w)
-    ny2 = min(max(y2 + pad_y, ny1 + 1), image_h)
-    return (nx1, ny1, nx2, ny2)
+    padded = sv.pad_boxes(
+        np.array([bbox]),
+        px=round((x2 - x1) * padding_ratio),
+        py=round((y2 - y1) * padding_ratio),
+    )
+    nx1, ny1, nx2, ny2 = (int(v) for v in sv.clip_boxes(padded, (image_w, image_h))[0])
+    nx1, ny1 = min(nx1, image_w - 1), min(ny1, image_h - 1)  # a crop is never empty
+    return (nx1, ny1, max(nx2, nx1 + 1), max(ny2, ny1 + 1))
 
 
 def downscale_to_max_side(image: np.ndarray, max_side: int) -> np.ndarray:
     """A new array no larger than ``max_side`` on its longer side (never upscales)."""
-    h, w = image.shape[:2]
-    longest = max(h, w)
-    if longest <= max_side:
-        return image.copy()
-    factor = max_side / longest
-    size = (max(1, round(w * factor)), max(1, round(h * factor)))
-    return cv2.resize(image, size, interpolation=cv2.INTER_AREA)
+    thumbnail = Image.fromarray(image)
+    thumbnail.thumbnail((max_side, max_side))
+    return np.array(thumbnail)
 
 
 def _usable_mask(mask: object, image_h: int, image_w: int, box: BBox) -> np.ndarray | None:

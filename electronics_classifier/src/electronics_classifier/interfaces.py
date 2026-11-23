@@ -65,6 +65,7 @@ class ItemContext:
     """What post-processors and warning rules may inspect for one item."""
 
     item: PreparedItem
+    index: int  # position of this item's detection within ``all_detections``
     all_detections: Sequence[RawDetection]
     image_w: int
     image_h: int

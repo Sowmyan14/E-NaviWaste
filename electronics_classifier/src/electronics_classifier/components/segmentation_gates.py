@@ -4,30 +4,24 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+import numpy as np
 from pydantic import BaseModel, ConfigDict, Field
 
 from ..interfaces import BuildContext
 from ..registry import register
-from ..schemas import BBox, RawDetection
+from ..schemas import RawDetection
 
 
-def box_iou(a: BBox, b: BBox) -> float:
-    """Intersection over union of two ``x1,y1,x2,y2`` boxes (0.0 for empty boxes)."""
-    ix = min(a[2], b[2]) - max(a[0], b[0])
-    iy = min(a[3], b[3]) - max(a[1], b[1])
-    if ix <= 0 or iy <= 0:
-        return 0.0
-    inter = ix * iy
-    union = (a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1]) - inter
-    return inter / union if union > 0 else 0.0
+def overlaps_other(idx: int, dets: Sequence[RawDetection], min_iou: float) -> bool:
+    """True if detection ``idx`` intersects another one with IoU of at least ``min_iou``."""
+    if len(dets) < 2:
+        return False
+    import supervision as sv
 
-
-def max_overlap(idx: int, dets: Sequence[RawDetection]) -> float:
-    """Highest IoU between detection ``idx`` and any other detection."""
-    return max(
-        (box_iou(dets[idx].bbox_xyxy, d.bbox_xyxy) for j, d in enumerate(dets) if j != idx),
-        default=0.0,
-    )
+    boxes = np.array([d.bbox_xyxy for d in dets], dtype=np.float64)
+    ious = sv.box_iou_batch(boxes[idx : idx + 1], boxes)[0]
+    ious[idx] = 0.0  # a box never overlaps itself
+    return bool(np.any((ious > 0.0) & (ious >= min_iou)))
 
 
 class _NoParams(BaseModel):
@@ -61,4 +55,4 @@ class OverlapGate:
         self.params = params
 
     def should_segment(self, item_idx: int, dets: Sequence[RawDetection]) -> bool:
-        return max_overlap(item_idx, dets) >= self.params.iou
+        return overlaps_other(item_idx, dets, self.params.iou)

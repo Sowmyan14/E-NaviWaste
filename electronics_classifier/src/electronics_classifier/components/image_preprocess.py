@@ -6,6 +6,7 @@ from collections.abc import Sequence
 
 import cv2
 import numpy as np
+from PIL import Image
 from pydantic import BaseModel, ConfigDict, Field
 
 from ..interfaces import BuildContext, ImageTransform, PreprocessState
@@ -64,15 +65,13 @@ class ResizeMaxSide:
 
     def apply(self, image: np.ndarray, state: PreprocessState) -> np.ndarray:
         h, w = image.shape[:2]
-        longest = max(h, w)
-        if longest <= self.params.max_side:
+        if max(h, w) <= self.params.max_side:
             state.records[self._key] = (1.0, 1.0, 0.0, 0.0)
             return image
-        factor = self.params.max_side / longest
-        new_w = max(1, round(w * factor))
-        new_h = max(1, round(h * factor))
-        resized = cv2.resize(image, (new_w, new_h), interpolation=cv2.INTER_AREA)
-        sx, sy = new_w / w, new_h / h
+        thumbnail = Image.fromarray(image)
+        thumbnail.thumbnail((self.params.max_side, self.params.max_side))
+        resized = np.array(thumbnail)
+        sx, sy = resized.shape[1] / w, resized.shape[0] / h  # the exact scale that was applied
         state.records[self._key] = (sx, sy, 0.0, 0.0)
         state.scale_x *= sx
         state.scale_y *= sy

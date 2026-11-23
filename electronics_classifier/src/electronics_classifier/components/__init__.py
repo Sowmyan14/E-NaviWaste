@@ -13,6 +13,9 @@ _BUILTIN_MODULES: tuple[str, ...] = (
     "segmenters",
     "segmentation_gates",
     "crop_transforms",
+    "vlm_clients",
+    "attribute_postprocess",
+    "warning_rules",
 )
 
 

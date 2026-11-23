@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from electronics_classifier.config import load_config
 from electronics_classifier.interfaces import BuildContext
-from electronics_classifier.schemas import RawDetection
+from electronics_classifier.schemas import PreparedItem, RawDetection
 
 IMAGE_KINDS = ("solid", "gradient", "noise", "dark", "blown-out", "blurred", "checkerboard")
 
@@ -35,6 +35,26 @@ def make_image(kind: str = "solid", h: int = 64, w: int = 64, seed: int = 0) -> 
     if kind == "blurred":
         return cv2.GaussianBlur(make_image("checkerboard", h, w), (0, 0), sigmaX=3)
     raise ValueError(f"unknown image kind '{kind}'. Kinds: {', '.join(IMAGE_KINDS)}")
+
+
+def make_prepared_item(
+    box=(10, 10, 50, 50),
+    det_id: str | None = "obj_1",
+    phrase: str = "router",
+    confidence: float = 0.9,
+    padded=None,
+    context: bool = True,
+) -> PreparedItem:
+    """A ready-made PreparedItem with a synthetic crop (and context image)."""
+    x1, y1, x2, y2 = padded or box
+    return PreparedItem(
+        detection=RawDetection(
+            detection_id=det_id, phrase=phrase, confidence=confidence, bbox_xyxy=box
+        ),
+        padded_bbox_xyxy=padded or box,
+        crop_rgb=make_image("noise", y2 - y1, x2 - x1),
+        context_rgb=make_image("gradient", 60, 80) if context else None,
+    )
 
 
 class FakeDetector:
