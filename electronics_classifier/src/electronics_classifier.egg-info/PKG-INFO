@@ -1,0 +1,31 @@
+Metadata-Version: 2.4
+Name: electronics-classifier
+Version: 0.1.0
+Summary: Image-only household electronics classifier with a modular, config-driven pipeline.
+License-Expression: MIT
+Requires-Python: <3.13,>=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: numpy
+Requires-Dist: opencv-python-headless
+Requires-Dist: Pillow
+Requires-Dist: pydantic>=2
+Requires-Dist: pyyaml
+Requires-Dist: supervision
+Provides-Extra: dino
+Requires-Dist: transformers; extra == "dino"
+Requires-Dist: torch; extra == "dino"
+Provides-Extra: vlm
+Requires-Dist: transformers; extra == "vlm"
+Requires-Dist: torch; extra == "vlm"
+Requires-Dist: qwen-vl-utils; extra == "vlm"
+Provides-Extra: sam
+Requires-Dist: segment-anything; extra == "sam"
+Provides-Extra: sam2
+Requires-Dist: sam2; extra == "sam2"
+Provides-Extra: dev
+Requires-Dist: pytest; extra == "dev"
+Requires-Dist: ruff; extra == "dev"
+
+# electronics_classifier
+
+Image-only household electronics classifier. The full README is written in Milestone 6.
