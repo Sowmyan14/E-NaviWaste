@@ -5,7 +5,12 @@ from __future__ import annotations
 import importlib
 
 # Modules are added here as the milestones that implement them land.
-_BUILTIN_MODULES: tuple[str, ...] = ()
+_BUILTIN_MODULES: tuple[str, ...] = (
+    "image_preprocess",
+    "detection_filters",
+    "detectors.grounding_dino",
+    "detectors.fake",
+)
 
 
 def load_builtin() -> None:

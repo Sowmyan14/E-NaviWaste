@@ -1,5 +1,7 @@
+import os
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 from pydantic import BaseModel, ConfigDict, Field
@@ -112,5 +114,7 @@ def test_import_and_load_builtin_pull_in_no_heavy_dependencies():
         "loaded = heavy & set(sys.modules);"
         "assert not loaded, loaded"
     )
-    result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+    src = str(Path(__file__).resolve().parents[1] / "src")
+    env = {**os.environ, "PYTHONPATH": src}
+    result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, env=env)
     assert result.returncode == 0, result.stderr

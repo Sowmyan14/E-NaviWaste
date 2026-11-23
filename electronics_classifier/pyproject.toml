@@ -31,7 +31,7 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["tests"]
+pythonpath = ["tests", "src"]
 addopts = "-m 'not slow'"
 markers = [
     "slow: runs real models and needs weights/photos; skipped by default",
