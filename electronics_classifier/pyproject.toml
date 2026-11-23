@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "electronics-classifier"
+version = "0.1.0"
+description = "Image-only household electronics classifier with a modular, config-driven pipeline."
+readme = "README.md"
+requires-python = ">=3.10,<3.13"
+license = "MIT"
+dependencies = [
+    "numpy",
+    "opencv-python-headless",
+    "Pillow",
+    "pydantic>=2",
+    "pyyaml",
+    "supervision",
+]
+
+[project.optional-dependencies]
+# default detector backend (Grounding DINO)
+dino = ["transformers", "torch"]
+vlm = ["transformers", "torch", "qwen-vl-utils"]
+sam = ["segment-anything"]
+sam2 = ["sam2"]
+dev = ["pytest", "ruff"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["tests", "src"]
+addopts = "-m 'not slow'"
+markers = [
+    "slow: runs real models and needs weights/photos; skipped by default",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B"]
