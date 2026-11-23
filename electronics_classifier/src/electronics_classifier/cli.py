@@ -97,7 +97,7 @@ def save_trace(trace: PipelineTrace, image_rgb: np.ndarray, out_dir: Path) -> Pa
     return folder
 
 
-def _write_outputs(
+def write_outputs(
     out_dir: Path,
     annotated: np.ndarray,
     result: ClassificationResult,
@@ -166,15 +166,15 @@ def _run(args: argparse.Namespace) -> int:
     sets = list(args.sets)
     if os.environ.get("EC_USE_FAKES") == "1":
         sets += FAKE_SETS  # last, so they win over the config
+    image = load_image(args.input)  # cheap check first: a bad path must not wait for model loads
     pipeline = ElectronicsClassificationPipeline(
         presets=args.preset, overrides=args.override, sets=sets
     )
-    image = load_image(args.input)
     outputs = pipeline.run(image, return_trace=args.save_intermediates)
     annotated, result = outputs[0], outputs[1]
 
     out_dir = Path(args.out_dir)
-    written = _write_outputs(out_dir, annotated, result, pipeline.config)
+    written = write_outputs(out_dir, annotated, result, pipeline.config)
     if args.save_intermediates:
         written.append(save_trace(outputs[2], image, out_dir))
     print(f"{len(result.items)} item(s) found. Wrote: " + ", ".join(str(p) for p in written))

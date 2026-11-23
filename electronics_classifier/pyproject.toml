@@ -21,7 +21,7 @@ dependencies = [
 [project.optional-dependencies]
 # default detector backend (Grounding DINO)
 dino = ["transformers", "torch"]
-vlm = ["transformers", "torch", "qwen-vl-utils"]
+vlm = ["transformers", "torch", "torchvision", "qwen-vl-utils"]
 sam = ["segment-anything"]
 sam2 = ["sam2"]
 dev = ["pytest", "ruff"]

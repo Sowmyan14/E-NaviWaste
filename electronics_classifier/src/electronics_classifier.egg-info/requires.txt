@@ -22,4 +22,5 @@ sam2
 [vlm]
 transformers
 torch
+torchvision
 qwen-vl-utils

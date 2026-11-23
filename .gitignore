@@ -14,3 +14,6 @@ __pycache__/
 *.safetensors
 *.ckpt
 *.onnx
+
+# Personal test photos (not for the repo)
+electronics_classifier/test_images/

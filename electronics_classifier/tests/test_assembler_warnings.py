@@ -103,6 +103,32 @@ def test_category_oov_rule_fires_only_for_out_of_vocabulary_categories(build_ctx
     assert evaluate(build_ctx, "category_oov", {**KNOWN, "category": "unknown"})
 
 
+@pytest.mark.parametrize(
+    "phrase,category,expected",
+    [
+        ("router", "smart speaker", True),  # two different specific categories
+        ("smart speaker", "laptop", True),
+        ("router", "router", False),  # agree
+        ("router", "electronic device", False),  # generic VLM answer / fallback: no claim made
+        ("electronic device", "router", False),  # generic detector phrase
+        ("Smart  Speaker", "smart speaker", False),  # case and spacing do not matter
+    ],
+)
+def test_category_mismatch_only_flags_two_different_specific_categories(
+    build_ctx, phrase, category, expected
+):
+    item = make_prepared_item(phrase=phrase)
+    codes = evaluate(build_ctx, "category_mismatch", {**KNOWN, "category": category}, item=item)
+    assert (codes == ["CATEGORY_MISMATCH"]) is expected
+
+
+def test_category_mismatch_is_on_by_default_and_documented(build_ctx):
+    from electronics_classifier.config import load_config
+
+    rules = [r["name"] for r in load_config()["pipeline"]["warning_rules"]]
+    assert "category_mismatch" in rules
+
+
 def test_rule_params_are_validated_at_build_time(build_ctx):
     for name, params, field in [
         ("low_detector_confidence", {"threshold": 1.5}, "threshold"),
