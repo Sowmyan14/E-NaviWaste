@@ -1,0 +1,21 @@
+# Faster, lighter run: smaller VLM, smaller input, fewer items, no SAM.
+# Usage: --preset fast
+pipeline:
+  image_preprocess:
+    - {name: ensure_rgb_uint8}
+    - {name: resize_max_side, params: {max_side: 960}}
+
+  # Lists are replaced whole, so the full filter list is restated (only top_k differs).
+  detection_filters:
+    - {name: score_threshold,  params: {min_score: 0.25}}
+    - {name: min_size,         params: {min_width_px: 32, min_height_px: 32}}
+    - {name: min_area_ratio,   params: {min_ratio: 0.002}}
+    - {name: nms,              params: {iou_threshold: 0.50, class_agnostic: true}}
+    - {name: top_k,            params: {k: 10}}
+
+  segmenter: {name: none, params: {}}
+
+  vlm:
+    client:
+      name: transformers
+      params: {model_name: "Qwen/Qwen2-VL-2B-Instruct", max_new_tokens: 128}

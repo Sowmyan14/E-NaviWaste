@@ -79,7 +79,7 @@ def validate_label_template(template: str) -> str:
     return template
 
 
-def _ascii_only(text: str) -> str:
+def ascii_only(text: str) -> str:
     """OpenCV fonts cannot draw non-ASCII or control characters: show them as ``?``."""
     return "".join(ch if " " <= ch <= "~" else "?" for ch in text)
 
@@ -98,7 +98,7 @@ def format_label(item: ClassifiedItem, template: str) -> str:
     except (ValueError, KeyError, IndexError, AttributeError):
         log.warning("label template failed for %s; using the id", item.id)
         text = item.id
-    text = _ascii_only(text)
+    text = ascii_only(text)
     if item.warnings:
         text = f"! {text}"
     if len(text) > MAX_LABEL_CHARS:

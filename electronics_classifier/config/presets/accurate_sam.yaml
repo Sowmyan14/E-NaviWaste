@@ -1,0 +1,13 @@
+# More accurate crops: SAM masks overlapping items, and more surrounding context per crop.
+# Usage: --preset accurate_sam
+# You must download the SAM checkpoint yourself and put it at the path below (or override
+# it with --set pipeline.segmenter.params.checkpoint=PATH). Building fails with a ConfigError
+# naming this path until the file exists. Check the SAM weights' licence before distributing.
+# To use SAM 2 instead: {name: sam2, params: {checkpoint: ..., model_cfg: ...}}
+pipeline:
+  segmenter:
+    name: sam
+    params: {checkpoint: "checkpoints/sam_vit_b_01ec64.pth", model_type: vit_b}
+  segmentation_gate: {name: overlap, params: {iou: 0.15}}   # only overlapping items get a mask
+  crop:
+    padding_ratio: 0.25
