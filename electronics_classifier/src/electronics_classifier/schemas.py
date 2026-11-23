@@ -44,6 +44,7 @@ class WarningCode(str, Enum):  # built-in codes; custom rules may emit any other
     VLM_PARSE_FAILED = "VLM_PARSE_FAILED"
     SMALL_CROP = "SMALL_CROP"
     PARTIALLY_OCCLUDED_OR_OVERLAPPING = "PARTIALLY_OCCLUDED_OR_OVERLAPPING"
+    SEGMENTATION_FAILED = "SEGMENTATION_FAILED"  # approved for segmentation, but no usable mask
 
 
 class ClassifiedItem(BaseModel):

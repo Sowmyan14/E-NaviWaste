@@ -108,7 +108,13 @@ def build(kind: str, spec: Any, build_ctx: BuildContext, path: str | None = None
         params = params_model.model_validate(component_spec.params)
     except ValidationError as exc:
         raise ConfigError(format_validation_error(exc, f"{path}.params")) from None
-    return cls(params, build_ctx)
+    try:
+        return cls(params, build_ctx)
+    except ConfigError as exc:
+        # Components report "params.<field>: ..." or a bare message; add the config path.
+        message = str(exc)
+        sep = "." if message.startswith("params.") else ": "
+        raise ConfigError(f"{path}{sep}{message}") from None
 
 
 def describe_components() -> dict[str, dict[str, list[tuple[str, str, str, str]]]]:

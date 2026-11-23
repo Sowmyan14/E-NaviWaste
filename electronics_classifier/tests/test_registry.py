@@ -13,6 +13,7 @@ from electronics_classifier.registry import KINDS, build, describe_components, r
 
 @pytest.fixture(autouse=True)
 def isolated_registry():
+    registry.load_builtin()  # built-ins must be in the snapshot, or the restore would drop them
     snapshot = {kind: dict(names) for kind, names in registry._REGISTRY.items()}
     yield
     registry._REGISTRY.clear()

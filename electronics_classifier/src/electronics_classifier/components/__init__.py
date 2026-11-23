@@ -10,6 +10,9 @@ _BUILTIN_MODULES: tuple[str, ...] = (
     "detection_filters",
     "detectors.grounding_dino",
     "detectors.fake",
+    "segmenters",
+    "segmentation_gates",
+    "crop_transforms",
 )
 
 
