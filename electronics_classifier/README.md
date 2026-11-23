@@ -73,6 +73,20 @@ first. Ready-made components can be injected by kind
 `EC_USE_FAKES=1` swaps the detector and the VLM for fakes so you can smoke-test offline. The
 result's `meta.components` then says `fake`, so it cannot be mistaken for a real run.
 
+### Comparing configs on many images
+
+```bash
+python experiments/run_batch.py IMAGES_DIR --configs a.yaml b.yaml --out-dir OUT
+```
+
+Every image in `IMAGES_DIR` is run under every override file. Results go to
+`OUT/<config_name>/<image_name>/` (annotated image, `result.json`, `resolved_config.yaml`), and
+`OUT/summary.csv` has one row per (image, config): item count, mean detector confidence, and
+how many items carry each warning code (one column per built-in code, plus `other_warnings`
+for custom codes). Each config's pipeline is built once and reused for all images. Unreadable
+images are skipped with a message; an invalid config fails before any image is processed.
+This is a minimal runner, not a hyperparameter-search framework.
+
 ## Configuration reference
 
 One YAML file describes the whole run: `config/pipeline.yaml`. Its sections mirror the stages:

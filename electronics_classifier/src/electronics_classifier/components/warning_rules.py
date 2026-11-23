@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from ..config import FALLBACK_CATEGORY
 from ..interfaces import BuildContext, ItemContext
 from ..registry import register
 from ..schemas import ClassifiedItem, WarningCode
@@ -112,3 +113,24 @@ class CategoryOov:
         if draft.attributes.category not in self.categories:
             return [WarningCode.CATEGORY_OUT_OF_VOCAB.value]
         return []
+
+
+@register("warning_rule", "category_mismatch")
+class CategoryMismatch:
+    """CATEGORY_MISMATCH when the detector's phrase and the VLM's category are different.
+
+    Only two *specific* categories can disagree: when either side is the generic
+    ``electronic device`` (for instance after a VLM fallback) nothing is flagged.
+    """
+
+    Params = _NoParams
+
+    def __init__(self, params: _NoParams, build: BuildContext) -> None:
+        self.params = params
+
+    def evaluate(self, draft: ClassifiedItem, item_ctx: ItemContext) -> list[str]:
+        phrase = " ".join(draft.detector_phrase.lower().split())
+        category = " ".join(draft.attributes.category.lower().split())
+        if FALLBACK_CATEGORY in (phrase, category) or phrase == category:
+            return []
+        return [WarningCode.CATEGORY_MISMATCH.value]

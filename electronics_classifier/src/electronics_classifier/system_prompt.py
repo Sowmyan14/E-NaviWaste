@@ -20,6 +20,10 @@ Rules:
 - Read "brand" and "model" only from text, logos or unmistakable design cues that are \
 clearly visible on the device itself.
 - Never guess a brand, and never fabricate or infer a model number.
+- Write a "model" only if its exact name or number is printed on the device in the images. \
+Recognizing the brand, a logo, or the product family is not enough: if no model text is \
+visible, "model" must be "unknown". For example, a logo alone means a known brand but \
+model "unknown".
 - "color" is the main colour of the device body.
 - If a value cannot be read from what is visible, use "unknown".
 - Output the JSON object only: no markdown, no explanations.

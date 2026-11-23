@@ -3,7 +3,8 @@
 Tier A (a01..a34): hostile input/output the system must survive. All pass.
 Tier B (b01..b08): known design weaknesses; each asserts the IDEAL behaviour and is a strict
 xfail. Do not weaken a Tier B assertion: when a weakness is fixed the test turns into an XPASS,
-which fails the run on purpose so the marker gets removed.
+which fails the run on purpose so the marker gets removed. B05 has been fixed that way (the
+`category_mismatch` rule), so 7 strict xfails remain; its test is now a plain regression test.
 Tier C (real models and photos) lives in tests/slow/.
 """
 
@@ -96,7 +97,8 @@ def test_a04_unusual_image_files_are_converted_to_upright_rgb_uint8(tmp_path, mo
         assert main(["run", str(folder / name), "--out-dir", str(tmp_path / "o" / name)]) == 0
 
 
-def test_a05_unreadable_inputs_exit_2_with_a_one_line_error(tmp_path, capsys):
+def test_a05_unreadable_inputs_exit_2_with_a_one_line_error(tmp_path, capsys, monkeypatch):
+    monkeypatch.setenv("EC_USE_FAKES", "1")  # never load real models in a test
     (tmp_path / "empty.jpg").write_bytes(b"")
     (tmp_path / "text.jpg").write_text("this is not a jpeg")
     (tmp_path / "adir").mkdir()
@@ -107,6 +109,17 @@ def test_a05_unreadable_inputs_exit_2_with_a_one_line_error(tmp_path, capsys):
         assert err.startswith("error: ") and err.count("\n") == 1 and "Traceback" not in err
     with pytest.raises(InputError):
         load_image(tmp_path / "text.jpg")
+
+
+def test_a05_a_bad_image_fails_before_any_model_is_built(tmp_path, monkeypatch, capsys):
+    import electronics_classifier.cli as cli
+
+    def must_not_build(*args, **kwargs):
+        raise AssertionError("the pipeline was built before the image was checked")
+
+    monkeypatch.setattr(cli, "ElectronicsClassificationPipeline", must_not_build)
+    assert main(["run", str(tmp_path / "missing.jpg")]) == 2
+    assert capsys.readouterr().err.startswith("error: cannot read image")
 
 
 def test_a06_empty_array_is_an_error_and_a_1x1_image_gives_no_items():
@@ -530,8 +543,8 @@ def test_b04_a_dino_fragment_strip_is_mapped_to_power_strip():
     assert map_label("strip", ["router", "power strip", "electronic device"]) == "power strip"
 
 
-@pytest.mark.xfail(strict=True, reason="KNOWN-B05: nothing compares the detector phrase with the "
-                   "VLM category. Fix: add a `category_mismatch` warning rule.")
+# B05 was fixed by the `category_mismatch` warning rule: the strict xfail was removed when the
+# test started passing, as intended. It stays here as a regression test.
 def test_b05_detector_router_versus_vlm_smart_speaker_gets_a_mismatch_warning():
     _, _, result = run_one([reply(category="smart speaker")])
     assert "CATEGORY_MISMATCH" in result.items[0].warnings
@@ -565,7 +578,8 @@ def test_b08_the_same_device_appearing_twice_flags_the_second_as_a_likely_duplic
 
 
 def test_the_expected_tier_a_and_b_inventory():
-    """Guards the plan's counts: 34 Tier A ids (A01-A34) and 8 strict Tier B xfails."""
+    """Guards the counts: 34 Tier A ids (A01-A34); Tier B ids B01-B08, of which 7 are still
+    strict xfails (B05 was fixed and promoted to a normal test)."""
     import re
     from pathlib import Path
 
@@ -574,5 +588,5 @@ def test_the_expected_tier_a_and_b_inventory():
     b_ids = {int(m) for m in re.findall(r"^def test_b(\d\d)_", source, flags=re.M)}
     assert a_ids == set(range(1, 35))
     assert b_ids == set(range(1, 9))
-    assert len(re.findall(r"^@pytest\.mark\.xfail\(strict=True", source, flags=re.M)) == 8
+    assert len(re.findall(r"^@pytest\.mark\.xfail\(strict=True", source, flags=re.M)) == 7
     assert load_config() and build and Image  # imports used above stay referenced

@@ -66,6 +66,7 @@ pipeline:
     - {name: low_detector_confidence, params: {threshold: 0.40}}
     - {name: small_crop,              params: {min_side_px: 64}}
     - {name: overlap,                 params: {iou: 0.15}}
+    - {name: category_mismatch}           # detector phrase vs VLM category disagree
 
 rendering:
   output_format: png                      # png | jpeg
