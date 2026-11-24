@@ -73,6 +73,41 @@ def test_nms_keeps_distinct_boxes_and_the_more_confident_duplicate(build_ctx):
     assert sorted(d.confidence for d in kept) == [0.6, 0.95]
 
 
+def test_containment_drops_parts_inside_a_larger_box(build_ctx):
+    phone = det("electronic device", 0.4, (10, 10, 90, 90))
+    lens = det("usb hub", 0.3, (20, 20, 30, 30))
+    label = det("game console", 0.9, (40, 40, 80, 80))  # more confident than its container
+    kept = make_filter(build_ctx, "containment").apply([lens, phone, label], CTX)
+    assert kept == [phone]
+
+
+def test_containment_keeps_partial_overlaps_and_disjoint_boxes(build_ctx):
+    a = det(box=(0, 0, 50, 50))
+    b = det(box=(30, 30, 80, 80))  # 16% of b is inside a
+    c = det(box=(60, 0, 100, 20))
+    assert make_filter(build_ctx, "containment").apply([a, b, c], CTX) == [a, b, c]
+
+
+def test_containment_threshold_and_equal_boxes(build_ctx):
+    big = det(box=(0, 0, 100, 100))
+    edge = det(box=(80, 10, 120, 50))  # exactly half of it is inside `big`
+    twin = det(box=(0, 0, 100, 100))
+    loose = make_filter(build_ctx, "containment", min_containment=0.4)
+    assert loose.apply([big, edge], CTX) == [big]
+    assert make_filter(build_ctx, "containment").apply([big, edge], CTX) == [big, edge]
+    assert make_filter(build_ctx, "containment").apply([big, twin], CTX) == [big, twin]  # NMS's job
+
+
+def test_containment_containers_limit_who_may_swallow(build_ctx):
+    laptop = det("laptop", 0.9, (0, 0, 100, 100))
+    phone = det("smartphone", 0.8, (20, 20, 40, 40))
+    strict = make_filter(build_ctx, "containment", containers=["power strip"])
+    assert strict.apply([laptop, phone], CTX) == [laptop, phone]
+    assert make_filter(build_ctx, "containment", containers=["laptop"]).apply(
+        [laptop, phone], CTX
+    ) == [laptop]
+
+
 def test_top_k_keeps_the_most_confident(build_ctx):
     dets = [det(conf=c, box=(i * 10, 0, i * 10 + 9, 9)) for i, c in enumerate([0.3, 0.9, 0.5])]
     kept = make_filter(build_ctx, "top_k", k=2).apply(dets, CTX)
@@ -81,7 +116,7 @@ def test_top_k_keeps_the_most_confident(build_ctx):
 
 
 def test_filters_handle_empty_and_single_inputs(build_ctx):
-    for name in ("score_threshold", "min_size", "min_area_ratio", "nms", "top_k"):
+    for name in ("score_threshold", "min_size", "min_area_ratio", "nms", "containment", "top_k"):
         assert make_filter(build_ctx, name).apply([], CTX) == []
     assert len(make_filter(build_ctx, "nms").apply([det()], CTX)) == 1
 
@@ -89,7 +124,7 @@ def test_filters_handle_empty_and_single_inputs(build_ctx):
 def test_filters_never_mutate_inputs(build_ctx):
     dets = [det(conf=0.9), det(conf=0.8, box=(12, 12, 50, 50)), det(conf=0.1, box=(70, 70, 75, 75))]
     snapshot = [d.model_copy(deep=True) for d in dets]
-    for name in ("score_threshold", "min_size", "min_area_ratio", "nms", "top_k"):
+    for name in ("score_threshold", "min_size", "min_area_ratio", "nms", "containment", "top_k"):
         make_filter(build_ctx, name).apply(dets, CTX)
         assert dets == snapshot
 

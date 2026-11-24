@@ -184,6 +184,51 @@ class Nms(_Filter):
         return [ranked[int(i)] for i in survivors.data["rank"]]
 
 
+@register("detection_filter", "containment")
+class Containment(_Filter):
+    """Drop a box that lies (almost) entirely inside a strictly larger box.
+
+    NMS compares IoU, which is tiny when a small box sits inside a big one, so parts of a
+    device (camera lens, label, button panel) survive it as separate items. This filter uses
+    intersection over the *smaller* box instead. The decision does not depend on confidence
+    or phrase, because the detector often labels a part with an unrelated phrase. Side effect:
+    a real device lying fully inside another (a charger on a power strip's box) is dropped too;
+    use ``containers`` to limit which phrases may swallow other boxes.
+    """
+
+    class Params(BaseModel):
+        model_config = ConfigDict(extra="forbid")
+        min_containment: float = Field(
+            default=0.9, gt=0.0, le=1.0,
+            description="Drop a box when this fraction of its area is inside a larger box.",
+        )  # fmt: skip
+        containers: list[str] = Field(
+            default_factory=list,
+            description="Only boxes with these phrases may swallow others; empty = any phrase.",
+        )
+
+    def apply(self, dets: list[RawDetection], ctx: FilterContext) -> list[RawDetection]:
+        if len(dets) < 2:
+            return list(dets)
+        boxes = _boxes(dets)
+        areas = (boxes[:, 2] - boxes[:, 0]) * (boxes[:, 3] - boxes[:, 1])
+        allowed = set(self.params.containers)
+        kept = []
+        for i, det in enumerate(dets):
+            swallowed = False
+            for j, other in enumerate(dets):
+                if i == j or areas[j] <= areas[i] or (allowed and other.phrase not in allowed):
+                    continue
+                w = min(boxes[i, 2], boxes[j, 2]) - max(boxes[i, 0], boxes[j, 0])
+                h = min(boxes[i, 3], boxes[j, 3]) - max(boxes[i, 1], boxes[j, 1])
+                if w > 0 and h > 0 and w * h / areas[i] >= self.params.min_containment:
+                    swallowed = True
+                    break
+            if not swallowed:
+                kept.append(det)
+        return kept
+
+
 @register("detection_filter", "top_k")
 class TopK(_Filter):
     """Keep the ``k`` most confident detections."""

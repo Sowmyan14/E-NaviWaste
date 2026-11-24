@@ -103,7 +103,7 @@ One YAML file describes the whole run: `config/pipeline.yaml`. Its sections mirr
 | `vocabulary.categories` | The one category list used by the detector, the VLM prompt, the post-processors and the rules. `electronic device` is always appended. Entries are lower-cased, stripped, de-duplicated; dots are removed because `.` separates Grounding DINO phrases |
 | `pipeline.image_preprocess` | Ordered steps before detection: `ensure_rgb_uint8`, `resize_max_side`, `clahe`, `gamma` |
 | `pipeline.detector` | `grounding_dino` (default) or `fake`; returns raw detections above a low floor score |
-| `pipeline.detection_filters` | Ordered: `score_threshold`, `min_size`, `min_area_ratio`, `nms`, `top_k` |
+| `pipeline.detection_filters` | Ordered: `score_threshold`, `min_size`, `min_area_ratio`, `nms`, `containment`, `top_k` |
 | `pipeline.segmenter` / `segmentation_gate` | `none` (default), `sam`, `sam2`; the gate (`always`, `overlap`) picks which items get a mask |
 | `pipeline.crop` | `padding_ratio`, `include_full_image_context`, `max_image_side_px` |
 | `pipeline.crop_transforms` | Ordered: `identity`, `upscale_min_side`, `sharpen`, `clahe` |
@@ -259,12 +259,12 @@ ruff check src tests
 
 - **Tier A** (`test_failure_modes.py`, A01 to A34): hostile input or output the system must
   survive. All pass.
-- **Tier B** (B01 to B08, same file): known design weaknesses (B05 and B06 are fixed). Each asserts the *ideal*
+- **Tier B** (B01 to B08, same file): known design weaknesses (B02, B05 and B06 are fixed). Each asserts the *ideal*
   behaviour and is `xfail(strict=True)`; the reason names the suggested fix. When a weakness
   is fixed the test becomes an XPASS and fails the run on purpose, so the marker gets removed.
-  Expected result: **6 xfailed** (B05 and B06 were fixed, by the `category_mismatch` rule and
-  the `ocr_verify_model` step, so their strict xfails were removed and they are now normal
-  regression tests).
+  Expected result: **5 xfailed** (B02, B05 and B06 were fixed, by the `containment` filter, the
+  `category_mismatch` rule and the `ocr_verify_model` step, so their strict xfails were removed
+  and they are now normal regression tests).
 - **Tier C** (`tests/slow/`, C01 to C14): real-model failures, informational only. Photos
   cannot be generated, so `tests/fixtures/failure_images/README.md` lists every file needed;
   a test whose photo is missing is skipped with the file name.
@@ -279,6 +279,11 @@ These points were not fixed by the plan and were decided with the maintainer:
 
 - Crops, the context image, SAM masks and the annotated output come from the **original**
   image; pre-processing only changes what the detector sees.
+- `containment` drops a box when 90% or more of its area is inside a strictly larger box, so parts
+  of a device (camera lens, label) are not reported as separate items. NMS cannot do this: it uses
+  IoU, which is tiny for a small box inside a big one. The cost: a real device lying fully inside
+  another box (a charger on a power strip's box) is dropped too. Set `containers: [phrase, ...]` to
+  let only those phrases swallow other boxes, or remove the filter to keep every box.
 - Out-of-range detector confidence (outside 0 to 1) drops the detection; phrases outside the
   vocabulary are dropped both by the detector backend and by the always-on sanitize step.
 - `gamma` is `out = in^(1/gamma)`: above 1 brightens.

@@ -265,9 +265,11 @@ def test_trace_exposes_every_stage_and_each_filters_effect():
     assert trace.preprocessed_image is not None
     assert len(trace.raw_detections) == 3 and len(trace.mapped_detections) == 3
     names = [name for name, _ in trace.filter_steps]
-    assert names == ["score_threshold", "min_size", "min_area_ratio", "nms", "top_k"]
+    assert names == [
+            "score_threshold", "min_size", "min_area_ratio", "nms", "containment", "top_k"
+        ]
     counts = [len(dets) for _, dets in trace.filter_steps]
-    assert counts == [2, 2, 2, 2, 2]  # score_threshold removed the 0.1 detection
+    assert counts == [2, 2, 2, 2, 2, 2]  # score_threshold removed the 0.1 detection
     assert [d.detection_id for d in trace.detections] == ["obj_1", "obj_2"]
     assert len(trace.prepared_items) == 2
     assert trace.vlm_replies["obj_1"] and trace.attributes_before["obj_1"]["brand"] == "TP-Link"

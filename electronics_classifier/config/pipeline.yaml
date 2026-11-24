@@ -39,6 +39,7 @@ pipeline:
     - {name: min_size,         params: {min_width_px: 32, min_height_px: 32}}
     - {name: min_area_ratio,   params: {min_ratio: 0.002}}
     - {name: nms,              params: {iou_threshold: 0.50, class_agnostic: true}}
+    - {name: containment,      params: {min_containment: 0.90}}   # drop parts (lens, label) inside a device box
     - {name: top_k,            params: {k: 20}}
 
   segmenter: {name: none, params: {}}     # or: {name: sam, params: {checkpoint: ..., model_type: vit_b}}
