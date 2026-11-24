@@ -29,6 +29,7 @@ pip install -e '.[dino]'    # default detector (Grounding DINO): transformers, t
 pip install -e '.[vlm]'     # default VLM client: transformers, torch, torchvision, qwen-vl-utils
 pip install -e '.[server]'  # VLM through LM Studio / Ollama / any OpenAI-compatible server
 pip install -e '.[ocr]'     # RapidOCR: lets the model-name check read text in the crops
+pip install -e '.[heic]'    # read iPhone HEIC/HEIF photos (JPEG and PNG need nothing extra)
 pip install -e '.[sam]'     # optional SAM masks (segment-anything)
 pip install -e '.[sam2]'    # optional SAM 2 masks (alternative to `sam`)
 pip install -e '.[dev]'     # pytest, ruff
@@ -69,7 +70,10 @@ print(result.model_dump_json(by_alias=True, indent=2))
 
 The Python API is strict: anything but a non-empty `(H, W, 3) uint8` array raises
 `ValueError`. The CLI loads files with Pillow, applies the EXIF rotation and converts to RGB
-first. Ready-made components can be injected by kind
+first. It reads JPEG and PNG (and the other formats Pillow knows) out of the box, and
+HEIC/HEIF with the `heic` extra: the plugin is only tried when Pillow does not recognise a
+file, so the JPEG and PNG paths never depend on it, and a HEIC file that was renamed still
+opens. Without the extra, a `.heic` file gives a one-line error that shows the install command. Ready-made components can be injected by kind
 (`ElectronicsClassificationPipeline(detector=..., vlm_client=...)`).
 
 `EC_USE_FAKES=1` swaps the detector and the VLM for fakes so you can smoke-test offline. The
@@ -310,6 +314,10 @@ These points were not fixed by the plan and were decided with the maintainer:
   (Apache-2.0).
 - **YOLO-World / Ultralytics is deliberately not included**: Ultralytics is AGPL-3.0 and would
   impose AGPL obligations on a combined work. Nothing here imports it.
+- The optional `heic` extra: `pillow-heif` (BSD-3-Clause). Its wheels bundle the `libheif`
+  library, which is **LGPL-3.0** (see the `LICENSES_bundled.txt` that ships inside the package).
+  It is a separate, dynamically loaded library and your code is not changed by it, but if you
+  redistribute a build that includes it, keep those notices.
 - The optional `ocr` extra: `rapidocr` (Apache-2.0, with bundled PaddleOCR-derived models also
   under Apache-2.0), `onnxruntime` (MIT) and `rapidfuzz` (MIT).
 - The optional `openai` package (Apache-2.0) is only an HTTP client for model servers. A hosted

@@ -24,6 +24,8 @@ dino = ["transformers", "torch"]
 vlm = ["transformers", "torch", "torchvision", "qwen-vl-utils"]
 # VLM through an OpenAI-compatible server: LM Studio, Ollama (local or cloud), vLLM, ...
 server = ["openai"]
+# read iPhone HEIC/HEIF photos (Pillow cannot decode them on its own)
+heic = ["pillow-heif"]
 # OCR cross-check of VLM model names (the ocr_verify_model post-processor)
 ocr = ["rapidocr", "onnxruntime", "rapidfuzz"]
 sam = ["segment-anything"]

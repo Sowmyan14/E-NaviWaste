@@ -28,7 +28,9 @@ from electronics_classifier.config import ConfigError
 from electronics_classifier.pipeline import ElectronicsClassificationPipeline
 from electronics_classifier.schemas import ClassificationResult, WarningCode
 
-IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp"}
+IMAGE_SUFFIXES = {
+    ".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp", ".avif", ".heic", ".heif",
+}  # fmt: skip
 WARNING_COLUMNS = [code.value for code in WarningCode]
 OTHER_WARNINGS = "other_warnings"  # any code that is not a built-in WarningCode
 HEADER = ["image", "config", "items", "mean_detector_confidence", *WARNING_COLUMNS, OTHER_WARNINGS]
