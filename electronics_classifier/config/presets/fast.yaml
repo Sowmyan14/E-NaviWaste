@@ -19,4 +19,4 @@ pipeline:
   vlm:
     client:
       name: transformers
-      params: {model_name: "Qwen/Qwen2-VL-2B-Instruct", max_new_tokens: 128}
+      params: {model_name: "Qwen/Qwen2-VL-2B-Instruct", temperature: 0.0, max_new_tokens: 128}

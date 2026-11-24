@@ -108,7 +108,7 @@ One YAML file describes the whole run: `config/pipeline.yaml`. Its sections mirr
 | `pipeline.crop` | `padding_ratio`, `include_full_image_context`, `max_image_side_px` |
 | `pipeline.crop_transforms` | Ordered: `identity`, `upscale_min_side`, `sharpen`, `clahe` |
 | `pipeline.vlm` | `client` (`transformers`, `openai_compatible`, `fake`), `max_retries`, `system_prompt_file` (a template containing `{categories}`) |
-| `pipeline.attribute_postprocess` | Ordered: `normalize_unknown`, `ocr_verify_model`, `category_vocab`, `brand_aliases` |
+| `pipeline.attribute_postprocess` | Ordered: `normalize_unknown`, `ocr_verify_model`, `category_vocab`, `category_open`, `brand_aliases` |
 | `pipeline.warning_rules` | Ordered: `unknown_field`, `low_detector_confidence`, `small_crop`, `overlap`, `category_mismatch`, `category_oov` |
 | `rendering` | `output_format`, `label_template`, `stroke_scale`, `font_scale`, `mask_alpha` |
 
@@ -293,6 +293,12 @@ These points were not fixed by the plan and were decided with the maintainer:
 - `category_oov` is available as a rule but is not in the default config, because the
   `category_vocab` post-processor already fixes categories. If you remove `category_vocab`,
   add `category_oov` or out-of-vocabulary categories will pass through without a warning.
+- `category_open` is the open-vocabulary alternative to `category_vocab`: a category outside
+  the vocabulary is kept (cleaned, at most `max_words` words) and flagged `CATEGORY_NOVEL`.
+  Only empty, `unknown` or sentence-like categories fall back to `electronic device`. Use it via
+  `--preset open_vocab`, which also swaps in a prompt that lets the VLM name unlisted devices
+  (run from the `electronics_classifier/` folder: the prompt path is relative). The detector
+  still only proposes boxes for vocabulary phrases, so add a generic one to catch unlisted items.
 - `brand_aliases` reads a YAML or JSON mapping file; aliases match case-insensitively and
   ignore hyphens, underscores and extra spaces.
 - Both `sam` and `sam2` are real segmenters behind one interface (`pip install -e '.[sam]'`
