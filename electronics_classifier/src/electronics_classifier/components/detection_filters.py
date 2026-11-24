@@ -147,6 +147,36 @@ class MinAreaRatio(_Filter):
         return kept
 
 
+@register("detection_filter", "full_frame_guard")
+class FullFrameGuard(_Filter):
+    """Handle boxes that cover (almost) the whole image.
+
+    A generic phrase ("electronic device", "appliance") can match the entire photo. Such a box
+    localizes nothing, and in a later ``containment`` step it would swallow every real box
+    inside it. So: if other, smaller boxes exist, the full-frame boxes are dropped; if every
+    box is full-frame, only the most confident one is kept (it becomes a whole-image item).
+    """
+
+    class Params(BaseModel):
+        model_config = ConfigDict(extra="forbid")
+        min_ratio: float = Field(
+            default=0.90, gt=0.0, le=1.0, description="Box area / image area that counts as full frame."
+        )  # fmt: skip
+
+    def apply(self, dets: list[RawDetection], ctx: FilterContext) -> list[RawDetection]:
+        image_area = max(ctx.image_w * ctx.image_h, 1)
+
+        def is_full(d: RawDetection) -> bool:
+            x1, y1, x2, y2 = d.bbox_xyxy
+            return (x2 - x1) * (y2 - y1) / image_area >= self.params.min_ratio
+
+        full = [d for d in dets if is_full(d)]
+        if not full:
+            return list(dets)
+        rest = [d for d in dets if not is_full(d)]
+        return rest or [min(full, key=_rank_key)]
+
+
 @register("detection_filter", "nms")
 class Nms(_Filter):
     """Non-maximum suppression (via ``supervision``): drop boxes with IoU > threshold."""
