@@ -266,10 +266,11 @@ def test_trace_exposes_every_stage_and_each_filters_effect():
     assert len(trace.raw_detections) == 3 and len(trace.mapped_detections) == 3
     names = [name for name, _ in trace.filter_steps]
     assert names == [
-            "score_threshold", "min_size", "min_area_ratio", "nms", "containment", "top_k"
+            "score_threshold", "min_size", "min_area_ratio", "full_frame_guard", "nms",
+            "containment", "top_k"
         ]
     counts = [len(dets) for _, dets in trace.filter_steps]
-    assert counts == [2, 2, 2, 2, 2, 2]  # score_threshold removed the 0.1 detection
+    assert counts == [2, 2, 2, 2, 2, 2, 2]  # score_threshold removed the 0.1 detection
     assert [d.detection_id for d in trace.detections] == ["obj_1", "obj_2"]
     assert len(trace.prepared_items) == 2
     assert trace.vlm_replies["obj_1"] and trace.attributes_before["obj_1"]["brand"] == "TP-Link"
@@ -380,7 +381,7 @@ def test_cli_smoke_run_with_fakes_writes_everything(tmp_path, monkeypatch, capsy
     written = {p.relative_to(out).as_posix() for p in out.rglob("*") if p.is_file()}
     for expected in ("annotated.png", "result.json", "resolved_config.yaml",
                      "intermediates/00_preprocessed.png", "intermediates/01_raw_detections.png",
-                     "intermediates/02_filter_4_nms.png", "intermediates/crop_obj_1.png",
+                     "intermediates/02_filter_5_nms.png", "intermediates/crop_obj_1.png",
                      "intermediates/vlm_obj_1.txt", "intermediates/attributes.json"):  # fmt: skip
         assert expected in written, expected
     payload = json.loads((out / "result.json").read_text(encoding="utf-8"))

@@ -58,6 +58,21 @@ def test_min_area_ratio(build_ctx):
     assert [d.bbox_xyxy for d in kept] == [(0, 0, 20, 20)]
 
 
+def test_full_frame_guard_drops_whole_photo_boxes_when_real_boxes_exist(build_ctx):
+    whole = det("appliance", 0.3, (0, 0, 100, 100))
+    real = det("router", 0.5, (10, 10, 50, 50))
+    kept = make_filter(build_ctx, "full_frame_guard", min_ratio=0.9).apply([whole, real], CTX)
+    assert kept == [real]
+
+
+def test_full_frame_guard_keeps_one_whole_photo_box_when_alone(build_ctx):
+    weak = det("appliance", 0.3, (0, 0, 100, 100))
+    strong = det("electronic device", 0.6, (2, 2, 98, 98))
+    guard = make_filter(build_ctx, "full_frame_guard", min_ratio=0.9)
+    assert guard.apply([weak, strong], CTX) == [strong]
+    assert guard.apply([], CTX) == []
+
+
 def test_nms_class_agnostic_versus_per_class(build_ctx):
     pair = [det("router", 0.9, (0, 0, 50, 50)), det("modem", 0.8, (2, 2, 50, 50))]
     agnostic = make_filter(build_ctx, "nms", iou_threshold=0.5, class_agnostic=True)
@@ -116,7 +131,7 @@ def test_top_k_keeps_the_most_confident(build_ctx):
 
 
 def test_filters_handle_empty_and_single_inputs(build_ctx):
-    for name in ("score_threshold", "min_size", "min_area_ratio", "nms", "containment", "top_k"):
+    for name in ("score_threshold", "min_size", "min_area_ratio", "full_frame_guard", "nms", "containment", "top_k"):
         assert make_filter(build_ctx, name).apply([], CTX) == []
     assert len(make_filter(build_ctx, "nms").apply([det()], CTX)) == 1
 
@@ -124,7 +139,7 @@ def test_filters_handle_empty_and_single_inputs(build_ctx):
 def test_filters_never_mutate_inputs(build_ctx):
     dets = [det(conf=0.9), det(conf=0.8, box=(12, 12, 50, 50)), det(conf=0.1, box=(70, 70, 75, 75))]
     snapshot = [d.model_copy(deep=True) for d in dets]
-    for name in ("score_threshold", "min_size", "min_area_ratio", "nms", "containment", "top_k"):
+    for name in ("score_threshold", "min_size", "min_area_ratio", "full_frame_guard", "nms", "containment", "top_k"):
         make_filter(build_ctx, name).apply(dets, CTX)
         assert dets == snapshot
 

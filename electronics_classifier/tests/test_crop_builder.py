@@ -114,6 +114,15 @@ def test_context_is_the_downscaled_full_image_or_absent():
     assert image.flags.writeable  # the caller's array is not locked
 
 
+def test_full_frame_crop_gets_no_duplicate_context_image():
+    image = make_image("noise", 100, 200)
+    whole, part = build_prepared_items(
+        image, [det((0, 0, 200, 100)), det((10, 10, 60, 60))], [None, None], crop_cfg()
+    )
+    assert whole.context_rgb is None
+    assert part.context_rgb is not None
+
+
 def test_small_images_are_not_upscaled_and_context_is_a_copy():
     image = make_image("noise", 50, 60)
     [item] = build_prepared_items(image, [det((5, 5, 30, 30))], [None], crop_cfg())
@@ -124,7 +133,7 @@ def test_small_images_are_not_upscaled_and_context_is_a_copy():
 def test_crops_and_context_respect_max_image_side():
     image = make_image("noise", 3000, 4000)
     [item] = build_prepared_items(
-        image, [det((0, 0, 4000, 3000))], [None], crop_cfg(max_image_side_px=512)
+        image, [det((0, 0, 2000, 1500))], [None], crop_cfg(max_image_side_px=512)
     )
     assert max(item.crop_rgb.shape[:2]) <= 512
     assert max(item.context_rgb.shape[:2]) <= 512

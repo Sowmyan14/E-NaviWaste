@@ -21,6 +21,7 @@ from .schemas import BBox, PreparedItem, RawDetection, WarningCode
 
 log = logging.getLogger(__name__)
 
+FULL_FRAME_RATIO = 0.90  # a crop this large is the scene itself: no separate context image
 MASK_FILL = 128  # outside-mask pixels in a masked crop are neutral gray
 
 
@@ -126,6 +127,7 @@ def build_prepared_items(
         padded = pad_and_clamp(det.bbox_xyxy, crop_cfg.padding_ratio, image_w, image_h)
         x1, y1, x2, y2 = padded
         crop = image_rgb[y1:y2, x1:x2].copy()
+        full_frame = (x2 - x1) * (y2 - y1) >= FULL_FRAME_RATIO * image_w * image_h
 
         mask = _usable_mask(masks[idx] if idx < len(masks) else None, image_h, image_w, padded)
         if mask is not None:
@@ -140,7 +142,7 @@ def build_prepared_items(
                 detection=det,
                 padded_bbox_xyxy=padded,
                 crop_rgb=crop,
-                context_rgb=context,
+                context_rgb=None if full_frame else context,
                 mask=mask,
             )
         )
