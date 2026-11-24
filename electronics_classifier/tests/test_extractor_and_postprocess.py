@@ -319,6 +319,41 @@ def test_category_vocab_reads_the_shared_vocabulary():
     assert step.apply({"category": "router"}, item_ctx())[1] == ["CATEGORY_OUT_OF_VOCAB"]
 
 
+# --- category_open -------------------------------------------------------------------
+
+
+def test_category_open_keeps_vocabulary_categories_without_a_warning(build_ctx):
+    out, warnings = post(build_ctx, "category_open").apply({"category": " Smart  Speaker"}, item_ctx())
+    assert out["category"] == "smart speaker" and warnings == []
+
+
+def test_category_open_keeps_a_novel_category_and_flags_it(build_ctx):
+    out, warnings = post(build_ctx, "category_open").apply({"category": "Electric Kettle"}, item_ctx())
+    assert out["category"] == "electric kettle"
+    assert warnings == ["CATEGORY_NOVEL"]
+
+
+@pytest.mark.parametrize(
+    "category", ["unknown", "", None, "12", "a device that boils water for tea and coffee"]
+)
+def test_category_open_falls_back_for_empty_or_sentence_categories(build_ctx, category):
+    out, warnings = post(build_ctx, "category_open").apply({"category": category}, item_ctx())
+    assert out["category"] == "electronic device"
+    assert warnings == ["CATEGORY_OUT_OF_VOCAB"]
+
+
+def test_category_mismatch_ignores_novel_categories(build_ctx):
+    from electronics_classifier.schemas import ClassifiedItem, SchemaOrgProductAttributes
+
+    rule = build("warning_rule", {"name": "category_mismatch"}, build_ctx)
+    item = item_ctx()
+    draft = ClassifiedItem(
+        id="obj_1", bbox_xyxy=[0, 0, 1, 1], detector_phrase="router", detector_confidence=0.9,
+        attributes=SchemaOrgProductAttributes(category="kettle"),
+    )  # fmt: skip
+    assert rule.evaluate(draft, item) == []
+
+
 # --- brand_aliases -------------------------------------------------------------------
 
 

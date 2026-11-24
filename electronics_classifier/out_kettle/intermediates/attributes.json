@@ -1,0 +1,84 @@
+{
+  "attributes_before": {
+    "obj_1": {
+      "brand": "unknown",
+      "model": "unknown",
+      "category": "kettle",
+      "color": "silver"
+    },
+    "obj_2": {
+      "brand": "unknown",
+      "model": "unknown",
+      "category": "cable",
+      "color": "black"
+    },
+    "obj_3": {
+      "brand": "unknown",
+      "model": "unknown",
+      "category": "kettle",
+      "color": "silver"
+    }
+  },
+  "attributes_after_each_postprocessor": {
+    "obj_1": [
+      {
+        "brand": "unknown",
+        "model": "unknown",
+        "category": "kettle",
+        "color": "silver"
+      },
+      {
+        "brand": "unknown",
+        "model": "unknown",
+        "category": "kettle",
+        "color": "silver"
+      },
+      {
+        "brand": "unknown",
+        "model": "unknown",
+        "category": "kettle",
+        "color": "silver"
+      }
+    ],
+    "obj_2": [
+      {
+        "brand": "unknown",
+        "model": "unknown",
+        "category": "cable",
+        "color": "black"
+      },
+      {
+        "brand": "unknown",
+        "model": "unknown",
+        "category": "cable",
+        "color": "black"
+      },
+      {
+        "brand": "unknown",
+        "model": "unknown",
+        "category": "cable",
+        "color": "black"
+      }
+    ],
+    "obj_3": [
+      {
+        "brand": "unknown",
+        "model": "unknown",
+        "category": "kettle",
+        "color": "silver"
+      },
+      {
+        "brand": "unknown",
+        "model": "unknown",
+        "category": "kettle",
+        "color": "silver"
+      },
+      {
+        "brand": "unknown",
+        "model": "unknown",
+        "category": "kettle",
+        "color": "silver"
+      }
+    ]
+  }
+}

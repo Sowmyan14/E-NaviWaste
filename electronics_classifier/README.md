@@ -29,6 +29,7 @@ pip install -e '.[dino]'    # default detector (Grounding DINO): transformers, t
 pip install -e '.[vlm]'     # default VLM client: transformers, torch, torchvision, qwen-vl-utils
 pip install -e '.[server]'  # VLM through LM Studio / Ollama / any OpenAI-compatible server
 pip install -e '.[ocr]'     # RapidOCR: lets the model-name check read text in the crops
+pip install -e '.[heic]'    # read iPhone HEIC/HEIF photos (JPEG and PNG need nothing extra)
 pip install -e '.[sam]'     # optional SAM masks (segment-anything)
 pip install -e '.[sam2]'    # optional SAM 2 masks (alternative to `sam`)
 pip install -e '.[dev]'     # pytest, ruff
@@ -69,7 +70,10 @@ print(result.model_dump_json(by_alias=True, indent=2))
 
 The Python API is strict: anything but a non-empty `(H, W, 3) uint8` array raises
 `ValueError`. The CLI loads files with Pillow, applies the EXIF rotation and converts to RGB
-first. Ready-made components can be injected by kind
+first. It reads JPEG and PNG (and the other formats Pillow knows) out of the box, and
+HEIC/HEIF with the `heic` extra: the plugin is only tried when Pillow does not recognise a
+file, so the JPEG and PNG paths never depend on it, and a HEIC file that was renamed still
+opens. Without the extra, a `.heic` file gives a one-line error that shows the install command. Ready-made components can be injected by kind
 (`ElectronicsClassificationPipeline(detector=..., vlm_client=...)`).
 
 `EC_USE_FAKES=1` swaps the detector and the VLM for fakes so you can smoke-test offline. The
@@ -99,12 +103,12 @@ One YAML file describes the whole run: `config/pipeline.yaml`. Its sections mirr
 | `vocabulary.categories` | The one category list used by the detector, the VLM prompt, the post-processors and the rules. `electronic device` is always appended. Entries are lower-cased, stripped, de-duplicated; dots are removed because `.` separates Grounding DINO phrases |
 | `pipeline.image_preprocess` | Ordered steps before detection: `ensure_rgb_uint8`, `resize_max_side`, `clahe`, `gamma` |
 | `pipeline.detector` | `grounding_dino` (default) or `fake`; returns raw detections above a low floor score |
-| `pipeline.detection_filters` | Ordered: `score_threshold`, `min_size`, `min_area_ratio`, `nms`, `top_k` |
+| `pipeline.detection_filters` | Ordered: `score_threshold`, `min_size`, `min_area_ratio`, `nms`, `containment`, `top_k` |
 | `pipeline.segmenter` / `segmentation_gate` | `none` (default), `sam`, `sam2`; the gate (`always`, `overlap`) picks which items get a mask |
 | `pipeline.crop` | `padding_ratio`, `include_full_image_context`, `max_image_side_px` |
 | `pipeline.crop_transforms` | Ordered: `identity`, `upscale_min_side`, `sharpen`, `clahe` |
 | `pipeline.vlm` | `client` (`transformers`, `openai_compatible`, `fake`), `max_retries`, `system_prompt_file` (a template containing `{categories}`) |
-| `pipeline.attribute_postprocess` | Ordered: `normalize_unknown`, `ocr_verify_model`, `category_vocab`, `brand_aliases` |
+| `pipeline.attribute_postprocess` | Ordered: `normalize_unknown`, `ocr_verify_model`, `category_vocab`, `category_open`, `brand_aliases` |
 | `pipeline.warning_rules` | Ordered: `unknown_field`, `low_detector_confidence`, `small_crop`, `overlap`, `category_mismatch`, `category_oov` |
 | `rendering` | `output_format`, `label_template`, `stroke_scale`, `font_scale`, `mask_alpha` |
 
@@ -255,12 +259,12 @@ ruff check src tests
 
 - **Tier A** (`test_failure_modes.py`, A01 to A34): hostile input or output the system must
   survive. All pass.
-- **Tier B** (B01 to B08, same file): known design weaknesses (B05 and B06 are fixed). Each asserts the *ideal*
+- **Tier B** (B01 to B08, same file): known design weaknesses (B02, B05 and B06 are fixed). Each asserts the *ideal*
   behaviour and is `xfail(strict=True)`; the reason names the suggested fix. When a weakness
   is fixed the test becomes an XPASS and fails the run on purpose, so the marker gets removed.
-  Expected result: **6 xfailed** (B05 and B06 were fixed, by the `category_mismatch` rule and
-  the `ocr_verify_model` step, so their strict xfails were removed and they are now normal
-  regression tests).
+  Expected result: **5 xfailed** (B02, B05 and B06 were fixed, by the `containment` filter, the
+  `category_mismatch` rule and the `ocr_verify_model` step, so their strict xfails were removed
+  and they are now normal regression tests).
 - **Tier C** (`tests/slow/`, C01 to C14): real-model failures, informational only. Photos
   cannot be generated, so `tests/fixtures/failure_images/README.md` lists every file needed;
   a test whose photo is missing is skipped with the file name.
@@ -275,6 +279,11 @@ These points were not fixed by the plan and were decided with the maintainer:
 
 - Crops, the context image, SAM masks and the annotated output come from the **original**
   image; pre-processing only changes what the detector sees.
+- `containment` drops a box when 90% or more of its area is inside a strictly larger box, so parts
+  of a device (camera lens, label) are not reported as separate items. NMS cannot do this: it uses
+  IoU, which is tiny for a small box inside a big one. The cost: a real device lying fully inside
+  another box (a charger on a power strip's box) is dropped too. Set `containers: [phrase, ...]` to
+  let only those phrases swallow other boxes, or remove the filter to keep every box.
 - Out-of-range detector confidence (outside 0 to 1) drops the detection; phrases outside the
   vocabulary are dropped both by the detector backend and by the always-on sanitize step.
 - `gamma` is `out = in^(1/gamma)`: above 1 brightens.
@@ -284,6 +293,12 @@ These points were not fixed by the plan and were decided with the maintainer:
 - `category_oov` is available as a rule but is not in the default config, because the
   `category_vocab` post-processor already fixes categories. If you remove `category_vocab`,
   add `category_oov` or out-of-vocabulary categories will pass through without a warning.
+- `category_open` is the open-vocabulary alternative to `category_vocab`: a category outside
+  the vocabulary is kept (cleaned, at most `max_words` words) and flagged `CATEGORY_NOVEL`.
+  Only empty, `unknown` or sentence-like categories fall back to `electronic device`. Use it via
+  `--preset open_vocab`, which also swaps in a prompt that lets the VLM name unlisted devices
+  (run from the `electronics_classifier/` folder: the prompt path is relative). The detector
+  still only proposes boxes for vocabulary phrases, so add a generic one to catch unlisted items.
 - `brand_aliases` reads a YAML or JSON mapping file; aliases match case-insensitively and
   ignore hyphens, underscores and extra spaces.
 - Both `sam` and `sam2` are real segmenters behind one interface (`pip install -e '.[sam]'`
@@ -310,6 +325,10 @@ These points were not fixed by the plan and were decided with the maintainer:
   (Apache-2.0).
 - **YOLO-World / Ultralytics is deliberately not included**: Ultralytics is AGPL-3.0 and would
   impose AGPL obligations on a combined work. Nothing here imports it.
+- The optional `heic` extra: `pillow-heif` (BSD-3-Clause). Its wheels bundle the `libheif`
+  library, which is **LGPL-3.0** (see the `LICENSES_bundled.txt` that ships inside the package).
+  It is a separate, dynamically loaded library and your code is not changed by it, but if you
+  redistribute a build that includes it, keep those notices.
 - The optional `ocr` extra: `rapidocr` (Apache-2.0, with bundled PaddleOCR-derived models also
   under Apache-2.0), `onnxruntime` (MIT) and `rapidfuzz` (MIT).
 - The optional `openai` package (Apache-2.0) is only an HTTP client for model servers. A hosted

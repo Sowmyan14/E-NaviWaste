@@ -1,0 +1,11 @@
+# Open-vocabulary categories: the VLM may name devices outside vocabulary.categories.
+# Novel labels are kept and flagged CATEGORY_NOVEL instead of becoming "electronic device".
+# Usage: --preset open_vocab
+pipeline:
+  vlm:
+    system_prompt_file: config/prompts/vlm_open_vocab_prompt.txt
+
+  attribute_postprocess:
+    - {name: normalize_unknown, params: {max_len: 64}}
+    - {name: ocr_verify_model}
+    - {name: category_open, params: {max_len: 48, max_words: 4}}

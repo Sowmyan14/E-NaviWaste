@@ -77,6 +77,41 @@ class CategoryVocab:
         return out, [WarningCode.CATEGORY_OUT_OF_VOCAB.value]
 
 
+@register("attribute_postprocess", "category_open")
+class CategoryOpen:
+    """Keep the VLM's category even when it is outside the vocabulary (open vocabulary).
+
+    Vocabulary categories pass unchanged. Anything else is cleaned (lower case, one line, at
+    most ``max_words`` words / ``max_len`` characters) and kept with CATEGORY_NOVEL. Only an
+    empty or "unknown" category falls back to "electronic device" with CATEGORY_OUT_OF_VOCAB.
+    """
+
+    class Params(BaseModel):
+        model_config = ConfigDict(extra="forbid")
+        max_len: int = Field(default=48, gt=0, description="Longest novel category, characters.")
+        max_words: int = Field(default=4, gt=0, description="Most words in a novel category.")
+
+    def __init__(self, params: Params, build: BuildContext) -> None:
+        self.params = params
+        self.categories = frozenset(build.categories)
+
+    def apply(self, attrs: Attributes, item_ctx: ItemContext) -> tuple[Attributes, list[str]]:
+        out = dict(attrs)
+        category = clean_text(attrs.get("category", UNKNOWN), self.params.max_len).lower()
+        if category in self.categories:
+            out["category"] = category
+            return out, []
+        if category == UNKNOWN or not any(ch.isalpha() for ch in category):
+            out["category"] = FALLBACK_CATEGORY
+            return out, [WarningCode.CATEGORY_OUT_OF_VOCAB.value]
+        words = category.split()
+        if len(words) > self.params.max_words:  # a sentence, not a label
+            out["category"] = FALLBACK_CATEGORY
+            return out, [WarningCode.CATEGORY_OUT_OF_VOCAB.value]
+        out["category"] = category
+        return out, [WarningCode.CATEGORY_NOVEL.value]
+
+
 def alias_key(text: str) -> str:
     """Case-insensitive key that ignores hyphens, underscores and extra spaces."""
     return " ".join(re.sub(r"[-_]", " ", text).lower().split())
