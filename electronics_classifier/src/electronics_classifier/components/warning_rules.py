@@ -120,17 +120,21 @@ class CategoryMismatch:
     """CATEGORY_MISMATCH when the detector's phrase and the VLM's category are different.
 
     Only two *specific* categories can disagree: when either side is the generic
-    ``electronic device`` (for instance after a VLM fallback) nothing is flagged.
+    ``electronic device`` (for instance after a VLM fallback) nothing is flagged. A novel
+    category (outside the vocabulary) is not flagged either: CATEGORY_NOVEL already reports it.
     """
 
     Params = _NoParams
 
     def __init__(self, params: _NoParams, build: BuildContext) -> None:
         self.params = params
+        self.categories = frozenset(build.categories)
 
     def evaluate(self, draft: ClassifiedItem, item_ctx: ItemContext) -> list[str]:
         phrase = " ".join(draft.detector_phrase.lower().split())
         category = " ".join(draft.attributes.category.lower().split())
         if FALLBACK_CATEGORY in (phrase, category) or phrase == category:
+            return []
+        if category not in self.categories:
             return []
         return [WarningCode.CATEGORY_MISMATCH.value]

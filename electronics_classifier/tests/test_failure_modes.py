@@ -516,9 +516,9 @@ def test_b01_two_different_devices_overlapping_at_iou_055_are_both_kept():
     assert len(result.items) == 2
 
 
-@pytest.mark.xfail(strict=True, reason="KNOWN-B02: one object detected under two phrases at IoU "
-                   "0.45 survives NMS (0.45 < 0.50); with B01 no single threshold fits both. "
-                   "Fix: merge by box plus phrase scoring.")
+# B02 was fixed (for boxes nested in one another) by the `containment` filter: the strict xfail was
+# removed when the test started passing. It stays here as a regression test. B01 still xfails: the
+# two boxes it keeps apart are nested too, so no geometry-only rule can tell B01 from B02.
 def test_b02_one_object_detected_twice_under_different_phrases_is_kept_once():
     first = det("router", 0.9, (100, 100, 300, 300))
     second = det("modem", 0.8, (100, 100, 300, 190))  # IoU 0.45
@@ -580,8 +580,8 @@ def test_b08_the_same_device_appearing_twice_flags_the_second_as_a_likely_duplic
 
 
 def test_the_expected_tier_a_and_b_inventory():
-    """Guards the counts: 34 Tier A ids (A01-A34); Tier B ids B01-B08, of which 6 are still
-    strict xfails (B05 and B06 were fixed and promoted to normal tests)."""
+    """Guards the counts: 34 Tier A ids (A01-A34); Tier B ids B01-B08, of which 5 are still
+    strict xfails (B02, B05 and B06 were fixed and promoted to normal tests)."""
     import re
     from pathlib import Path
 
@@ -590,5 +590,5 @@ def test_the_expected_tier_a_and_b_inventory():
     b_ids = {int(m) for m in re.findall(r"^def test_b(\d\d)_", source, flags=re.M)}
     assert a_ids == set(range(1, 35))
     assert b_ids == set(range(1, 9))
-    assert len(re.findall(r"^@pytest\.mark\.xfail\(strict=True", source, flags=re.M)) == 6
+    assert len(re.findall(r"^@pytest\.mark\.xfail\(strict=True", source, flags=re.M)) == 5
     assert load_config() and build and Image  # imports used above stay referenced

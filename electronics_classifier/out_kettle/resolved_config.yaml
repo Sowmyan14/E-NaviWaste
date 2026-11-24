@@ -1,0 +1,111 @@
+run:
+  device: auto
+  seed: 0
+vocabulary:
+  categories:
+  - router
+  - modem
+  - power strip
+  - charger
+  - smart speaker
+  - laptop
+  - tablet
+  - smartphone
+  - remote control
+  - game console
+  - monitor
+  - television
+  - webcam
+  - usb hub
+  - cable
+  - electronic device
+pipeline:
+  image_preprocess:
+  - name: ensure_rgb_uint8
+    params: {}
+  - name: resize_max_side
+    params:
+      max_side: 1280
+  detector:
+    name: grounding_dino
+    params:
+      model_id: IDEA-Research/grounding-dino-tiny
+      raw_box_threshold: 0.15
+      raw_text_threshold: 0.15
+      max_prompt_tokens: 256
+  detection_filters:
+  - name: score_threshold
+    params:
+      min_score: 0.25
+  - name: min_size
+    params:
+      min_width_px: 32
+      min_height_px: 32
+  - name: min_area_ratio
+    params:
+      min_ratio: 0.002
+  - name: nms
+    params:
+      iou_threshold: 0.5
+      class_agnostic: true
+  - name: containment
+    params:
+      min_containment: 0.9
+  - name: top_k
+    params:
+      k: 20
+  segmenter:
+    name: none
+    params: {}
+  segmentation_gate:
+    name: overlap
+    params:
+      iou: 0.15
+  crop:
+    padding_ratio: 0.12
+    include_full_image_context: true
+    max_image_side_px: 1024
+  crop_transforms:
+  - name: identity
+    params: {}
+  vlm:
+    client:
+      name: openai_compatible
+      params:
+        base_url: http://localhost:11434/v1
+        model: qwen3-vl:8b-instruct
+        temperature: 0.0
+        max_tokens: 256
+    max_retries: 1
+    system_prompt_file: config/prompts/vlm_open_vocab_prompt.txt
+  attribute_postprocess:
+  - name: normalize_unknown
+    params:
+      max_len: 64
+  - name: ocr_verify_model
+    params: {}
+  - name: category_open
+    params:
+      max_len: 48
+      max_words: 4
+  warning_rules:
+  - name: unknown_field
+    params: {}
+  - name: low_detector_confidence
+    params:
+      threshold: 0.4
+  - name: small_crop
+    params:
+      min_side_px: 64
+  - name: overlap
+    params:
+      iou: 0.15
+  - name: category_mismatch
+    params: {}
+rendering:
+  output_format: png
+  label_template: '{id} {category} | {brand} {model} | {color} | {confidence:.2f}'
+  stroke_scale: 1.0
+  font_scale: 1.0
+  mask_alpha: 0.35
+# config_hash: 2fa2603aee31

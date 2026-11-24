@@ -16,7 +16,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 import supervision as sv
-from PIL import Image, ImageOps
+from PIL import Image, ImageOps, UnidentifiedImageError
 
 from .assembler import result_to_json
 from .config import ConfigError, config_hash, dump_yaml, load_config
@@ -27,6 +27,10 @@ from .schemas import ClassificationResult, RawDetection
 from .trace import PipelineTrace
 
 FAKE_SETS = ("pipeline.detector.name=fake", "pipeline.vlm.client.name=fake")
+HEIC_SUFFIXES = frozenset({".heic", ".heif"})
+HEIC_HINT = "pip install electronics-classifier[heic]"
+RAW_SUFFIXES = frozenset({".dng"})  # Android "Pro"/RAW mode; not decoded by this project
+_heif_ready: bool | None = None  # None: not tried yet
 
 
 class InputError(Exception):
@@ -48,12 +52,49 @@ def _to_rgb_uint8(image: Image.Image) -> np.ndarray:
     return np.array(image.convert("RGB"))
 
 
+def _enable_heic() -> bool:
+    """Teach Pillow to open HEIC/HEIF, if the optional ``pillow-heif`` plugin is installed."""
+    global _heif_ready
+    if _heif_ready is None:
+        try:
+            from pillow_heif import register_heif_opener
+
+            register_heif_opener()
+            _heif_ready = True
+        except ImportError:
+            _heif_ready = False
+    return _heif_ready
+
+
+def _open_rgb(path: str | Path) -> np.ndarray:
+    with Image.open(path) as opened:
+        return _to_rgb_uint8(ImageOps.exif_transpose(opened))
+
+
 def load_image(path: str | Path) -> np.ndarray:
-    """Pillow, upright via EXIF, converted to ``(H, W, 3) uint8`` RGB."""
+    """Pillow, upright via EXIF, converted to ``(H, W, 3) uint8`` RGB.
+
+    JPEG, PNG and the other formats Pillow knows are read exactly as before. If Pillow does
+    not recognise the file, HEIC/HEIF (iPhone photos) is tried through the optional
+    ``pillow-heif`` plugin, whatever the file is called.
+    """
     try:
-        with Image.open(path) as opened:
-            return _to_rgb_uint8(ImageOps.exif_transpose(opened))
+        try:
+            return _open_rgb(path)
+        except UnidentifiedImageError:
+            if not _enable_heic():
+                raise
+            return _open_rgb(path)  # Pillow can now read HEIC; unreadable files fail again
     except (OSError, ValueError, Image.DecompressionBombError) as exc:
+        if Path(path).suffix.lower() in HEIC_SUFFIXES and not _enable_heic():
+            raise InputError(
+                f"cannot read HEIC image {path}: HEIC support is not installed ({HEIC_HINT})"
+            ) from None
+        if Path(path).suffix.lower() in RAW_SUFFIXES:
+            raise InputError(
+                f"cannot read RAW image {path}: RAW/DNG photos are not supported; "
+                "export or share a JPEG or PNG copy"
+            ) from None
         raise InputError(f"cannot read image {path}: {_one_line(exc)}") from None
 
 

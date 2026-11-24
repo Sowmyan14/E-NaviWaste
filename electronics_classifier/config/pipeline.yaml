@@ -19,6 +19,7 @@ vocabulary:
     - webcam
     - usb hub
     - cable
+    - appliance
     - electronic device
 
 pipeline:
@@ -37,8 +38,10 @@ pipeline:
   detection_filters:                      # applied in order; reorder/remove/add freely
     - {name: score_threshold,  params: {min_score: 0.25}}
     - {name: min_size,         params: {min_width_px: 32, min_height_px: 32}}
-    - {name: min_area_ratio,   params: {min_ratio: 0.002}}
+    - {name: min_area_ratio,   params: {min_ratio: 0.02}}    # drops edge slivers and background scraps
+    - {name: full_frame_guard, params: {min_ratio: 0.90}}    # whole-photo boxes must not swallow real ones
     - {name: nms,              params: {iou_threshold: 0.50, class_agnostic: true}}
+    - {name: containment,      params: {min_containment: 0.90}}   # drop parts (lens, label) inside a device box
     - {name: top_k,            params: {k: 20}}
 
   segmenter: {name: none, params: {}}     # or: {name: sam, params: {checkpoint: ..., model_type: vit_b}}
@@ -53,7 +56,7 @@ pipeline:
     - {name: identity}
 
   vlm:
-    client: {name: transformers, params: {model_name: "Qwen/Qwen2.5-VL-3B-Instruct", temperature: 0.0, max_new_tokens: 256}}
+    client: {name: openai_compatible, params: {base_url: "http://localhost:11434/v1", model: "qwen3-vl:8b-instruct", temperature: 0.0, max_tokens: 256}}   # local Ollama
     max_retries: 1
     system_prompt_file: null              # null = built-in prompt; else path to a template with {categories}
 
