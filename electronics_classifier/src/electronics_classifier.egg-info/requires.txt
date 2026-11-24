@@ -13,6 +13,14 @@ ruff
 transformers
 torch
 
+[heic]
+pillow-heif
+
+[ocr]
+rapidocr
+onnxruntime
+rapidfuzz
+
 [sam]
 segment-anything
 

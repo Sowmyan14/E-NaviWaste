@@ -46,7 +46,7 @@ with left:
     st.subheader("1. Add a photo")
     source = st.radio("Input", ["Upload", "Camera"], horizontal=True, label_visibility="collapsed")
     if source == "Upload":
-        file = st.file_uploader("Device photo", type=["jpg", "jpeg", "png"])
+        file = st.file_uploader("Device photo", type=["jpg", "jpeg", "png", "heic"])
     else:
         file = st.camera_input("Take a photo")
  

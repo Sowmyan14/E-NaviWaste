@@ -37,6 +37,7 @@ tests/test_crop_builder.py
 tests/test_detection_filters.py
 tests/test_extractor_and_postprocess.py
 tests/test_failure_modes.py
+tests/test_image_loading.py
 tests/test_image_preprocess.py
 tests/test_pipeline_e2e_mocked.py
 tests/test_registry.py
