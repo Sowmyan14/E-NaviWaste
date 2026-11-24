@@ -1,0 +1,1 @@
+{"brand": "unknown", "model": "unknown", "category": "appliance", "color": "silver"}

@@ -1,0 +1,118 @@
+{
+  "image_width": 3024,
+  "image_height": 4032,
+  "items": [
+    {
+      "id": "obj_1",
+      "bbox_xyxy": [
+        784,
+        838,
+        2391,
+        3270
+      ],
+      "detector_phrase": "smart speaker",
+      "detector_confidence": 0.5719896554946899,
+      "attributes": {
+        "@context": "https://schema.org",
+        "@type": "Product",
+        "brand": "unknown",
+        "model": "unknown",
+        "category": "kettle",
+        "color": "silver"
+      },
+      "warnings": [
+        "CATEGORY_NOVEL",
+        "BRAND_UNKNOWN",
+        "MODEL_UNKNOWN",
+        "PARTIALLY_OCCLUDED_OR_OVERLAPPING"
+      ]
+    },
+    {
+      "id": "obj_2",
+      "bbox_xyxy": [
+        132,
+        1789,
+        873,
+        2265
+      ],
+      "detector_phrase": "remote control",
+      "detector_confidence": 0.2799287438392639,
+      "attributes": {
+        "@context": "https://schema.org",
+        "@type": "Product",
+        "brand": "unknown",
+        "model": "unknown",
+        "category": "cable",
+        "color": "black"
+      },
+      "warnings": [
+        "BRAND_UNKNOWN",
+        "MODEL_UNKNOWN",
+        "LOW_DETECTOR_CONFIDENCE",
+        "CATEGORY_MISMATCH"
+      ]
+    },
+    {
+      "id": "obj_3",
+      "bbox_xyxy": [
+        548,
+        2331,
+        2514,
+        3389
+      ],
+      "detector_phrase": "cable",
+      "detector_confidence": 0.5699675679206848,
+      "attributes": {
+        "@context": "https://schema.org",
+        "@type": "Product",
+        "brand": "unknown",
+        "model": "unknown",
+        "category": "kettle",
+        "color": "silver"
+      },
+      "warnings": [
+        "CATEGORY_NOVEL",
+        "BRAND_UNKNOWN",
+        "MODEL_UNKNOWN",
+        "PARTIALLY_OCCLUDED_OR_OVERLAPPING"
+      ]
+    }
+  ],
+  "annotated_image_format": "png",
+  "meta": {
+    "config_hash": "2fa2603aee31",
+    "components": {
+      "image_preprocess": [
+        "ensure_rgb_uint8",
+        "resize_max_side"
+      ],
+      "detector": "grounding_dino",
+      "detection_filter": [
+        "score_threshold",
+        "min_size",
+        "min_area_ratio",
+        "nms",
+        "containment",
+        "top_k"
+      ],
+      "segmenter": "none",
+      "segmentation_gate": "overlap",
+      "crop_transform": [
+        "identity"
+      ],
+      "vlm_client": "openai_compatible",
+      "attribute_postprocess": [
+        "normalize_unknown",
+        "ocr_verify_model",
+        "category_open"
+      ],
+      "warning_rule": [
+        "unknown_field",
+        "low_detector_confidence",
+        "small_crop",
+        "overlap",
+        "category_mismatch"
+      ]
+    }
+  }
+}
