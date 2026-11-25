@@ -3,6 +3,10 @@
 Needs real weights (`pip install -e '.[dino,vlm]'`) and the photos listed in
 tests/fixtures/failure_images/README.md. Run with: pytest tests/slow -m slow -s
 
+C01-C14 run on the `baseline` preset (Grounding DINO prompted with the vocabulary), the pipeline
+they were written for. C15-C17 run on the default Grounded-SAM + RAM++ pipeline and need
+`pip install -e '.[grounded,vlm]'` and the RAM++ checkpoint; they skip themselves without it.
+
 Every test states the IDEAL behaviour and is xfail(strict=False): a failure is printed as an
 expected failure instead of breaking CI. A test is skipped when its photo is missing.
 """
@@ -31,15 +35,25 @@ def load_photo(name: str) -> np.ndarray:
 _PIPELINE = {}
 
 
-def get_pipeline():
-    """Built on first use, after the photo check, so a missing photo is reported first."""
+def get_pipeline(preset: str | None = "baseline"):
+    """Built on first use, after the photo check, so a missing photo is reported first.
+
+    ``preset=None`` builds the default (Grounded-SAM + RAM++) pipeline.
+    """
     pytest.importorskip("torch")
     pytest.importorskip("transformers")
-    if "default" not in _PIPELINE:
+    if preset is None:
+        pytest.importorskip("ram", reason="needs: pip install -e '.[grounded]'")
+    if preset not in _PIPELINE:
+        from electronics_classifier.config import ConfigError
         from electronics_classifier.pipeline import ElectronicsClassificationPipeline
 
-        _PIPELINE["default"] = ElectronicsClassificationPipeline()
-    return _PIPELINE["default"]
+        try:
+            presets = [preset] if preset else []
+            _PIPELINE[preset] = ElectronicsClassificationPipeline(presets=presets)
+        except ConfigError as exc:  # most likely the RAM++ checkpoint is not downloaded
+            pytest.skip(str(exc))
+    return _PIPELINE[preset]
 
 
 def classify(image, pipe=None):
@@ -164,3 +178,26 @@ def test_c14_a_crowded_shelf_respects_top_k_and_finishes():
     result = classify(image)
     print(f"  runtime: {time.perf_counter() - start:.1f}s for {len(result.items)} items")
     assert 0 < len(result.items) <= 20
+
+
+# --- Grounded-SAM + RAM++ (the default pipeline) ---------------------------------------
+
+
+@informational
+def test_c15_ram_finds_a_device_that_is_not_in_the_vocabulary():
+    result = classify(load_photo("kitchen_toaster_kettle.jpg"), get_pipeline(None))
+    assert result.items, "RAM++ should tag the kettle or toaster and the VLM should keep it"
+    novel = ("kettle", "electric kettle", "toaster")
+    assert any(i.attributes.category in novel for i in result.items)
+
+
+@informational
+def test_c16_ram_scene_tags_do_not_become_items():
+    result = classify(load_photo("empty_room.jpg"), get_pipeline(None))
+    assert result.items == []  # floor, wall and table boxes are dropped by the VLM verdict
+
+
+@informational
+def test_c17_a_poster_of_a_phone_is_dropped_by_the_vlm_verdict():
+    result = classify(load_photo("poster_smartphone.jpg"), get_pipeline(None))
+    assert result.items == []

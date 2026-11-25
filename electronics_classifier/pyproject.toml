@@ -19,8 +19,16 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# default detector backend (Grounding DINO)
+# Grounding DINO alone (the `baseline` preset)
 dino = ["transformers", "torch"]
+# default pipeline: RAM++ tags + Grounding DINO boxes + Hugging Face SAM masks.
+# recognize-anything is only on GitHub, so this extra cannot be published to PyPI as is.
+grounded = [
+    "transformers",
+    "torch",
+    "torchvision",
+    "recognize-anything @ git+https://github.com/xinyu1205/recognize-anything.git",
+]
 vlm = ["transformers", "torch", "torchvision", "qwen-vl-utils"]
 # VLM through an OpenAI-compatible server: LM Studio, Ollama (local or cloud), vLLM, ...
 server = ["openai"]

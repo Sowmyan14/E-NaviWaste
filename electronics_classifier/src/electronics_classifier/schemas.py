@@ -48,6 +48,7 @@ class WarningCode(str, Enum):  # built-in codes; custom rules may emit any other
     CATEGORY_NOVEL = "CATEGORY_NOVEL"  # the VLM named a category outside the vocabulary; kept
     CATEGORY_MISMATCH = "CATEGORY_MISMATCH"  # detector phrase and VLM category disagree
     MODEL_UNVERIFIED = "MODEL_UNVERIFIED"  # the VLM named a model that OCR could not find
+    NOT_ELECTRONIC = "NOT_ELECTRONIC"  # the VLM said this is not an electronic device; kept
 
 
 class ClassifiedItem(BaseModel):

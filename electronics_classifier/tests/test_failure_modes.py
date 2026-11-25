@@ -1,6 +1,6 @@
 """Failure-mode and adversarial tests (Section 10.1 of the plan).
 
-Tier A (a01..a34): hostile input/output the system must survive. All pass.
+Tier A (a01..a40): hostile input/output the system must survive. All pass.
 Tier B (b01..b08): known design weaknesses; each asserts the IDEAL behaviour and is a strict
 xfail. Do not weaken a Tier B assertion: when a weakness is fixed the test turns into an XPASS,
 which fails the run on purpose so the marker gets removed. B05 (`category_mismatch` rule) and
@@ -579,8 +579,87 @@ def test_b08_the_same_device_appearing_twice_flags_the_second_as_a_likely_duplic
     assert any("DUPLICATE" in w for w in result.items[1].warnings)
 
 
+# --- Tier A, Grounded-SAM + RAM++ additions (A35-A40) -----------------------------------
+
+
+def _ram(tags, **params):
+    from test_ram_detector import StubRam
+
+    return StubRam(tags, **params)
+
+
+def test_a35_ram_that_tags_nothing_still_detects_through_the_vocabulary():
+    detector = _ram("")
+    assert [d.phrase for d in detector.predict(make_image("solid", 100, 100))][:2] == [
+        "router", "laptop",
+    ]  # fmt: skip
+    only_tags = _ram("", include_vocabulary=False)
+    assert only_tags.predict(make_image("solid", 100, 100)) == [] and only_tags.prompts == []
+
+
+@pytest.mark.parametrize(
+    "hostile",
+    [
+        "router . laptop | kettle, toaster",  # the DINO and RAM separators inside a tag
+        "a" * 5000,  # one giant tag
+        " | ".join(f"tag{i}" for i in range(500)),  # a huge tag list
+        "| | ||| . , . |",  # nothing but separators
+    ],
+)
+def test_a36_hostile_tag_text_cannot_break_the_prompt_or_the_run(hostile):
+    detector = _ram(hostile, max_tags=10)
+    found = detector.predict(make_image("solid", 100, 100))
+    for prompt in detector.prompts:
+        assert prompt.endswith(" .") and ". ." not in prompt and "," not in prompt
+        assert len(prompt.removesuffix(" .").split(" . ")) == prompt.count(" . ") + 1
+    assert all("." not in d.phrase and "," not in d.phrase for d in found)
+    assert len({d.phrase for d in found}) <= 10 + len(detector.vocabulary)
+
+
+def test_a37_duplicate_case_variant_and_non_ascii_tags_are_cleaned_once():
+    from electronics_classifier.components.detectors.ram_grounding_dino import clean_tags
+
+    raw = "Kettle | kettle | KETTLE | Wasserkocher | 电水壶 | café machine | k\u00e9ttle"
+    tags = clean_tags(raw)
+    assert tags.count("kettle") == 1
+    assert {"wasserkocher", "电水壶", "café machine"} <= set(tags)
+    assert all(tag == " ".join(tag.split()) and tag == tag.lower() for tag in tags)
+
+
+def test_a38_an_empty_sam_mask_is_ignored_with_a_warning_not_used_as_a_blank_crop():
+    class EmptyMasks:
+        def segment(self, image_rgb, boxes):
+            return [np.zeros(image_rgb.shape[:2], dtype=bool) for _ in boxes]
+
+    pipeline = make_pipeline(
+        [det("router", 0.9, (100, 100, 300, 300))], [VALID_REPLY],
+        sets=["pipeline.segmentation_gate.name=always"], segmenter=EmptyMasks(),
+    )  # fmt: skip
+    _, result = pipeline.run(IMAGE)
+    assert "SEGMENTATION_FAILED" in result.items[0].warnings
+    assert result.items[0].attributes.category == "router"
+
+
+def test_a39_a_vlm_that_calls_everything_not_electronic_gives_an_empty_valid_result():
+    from test_vlm_validation import default_pipeline, reply
+
+    annotated, result = default_pipeline(
+        [det("router"), det("laptop", 0.8, (400, 300, 600, 450))], [reply(False, category="mug")]
+    ).run(IMAGE)
+    assert result.items == [] and annotated.shape == IMAGE.shape
+    assert json.loads(result_to_json(result))["items"] == []
+
+
+@pytest.mark.parametrize("verdict", ["maybe", 7, [], {"x": 1}, None, "", "yes please"])
+def test_a40_a_malformed_verdict_never_drops_a_real_device(verdict):
+    from test_vlm_validation import default_pipeline, reply
+
+    _, result = default_pipeline([det("router")], [reply(verdict)]).run(IMAGE)
+    assert len(result.items) == 1 and "NOT_ELECTRONIC" not in result.items[0].warnings
+
+
 def test_the_expected_tier_a_and_b_inventory():
-    """Guards the counts: 34 Tier A ids (A01-A34); Tier B ids B01-B08, of which 5 are still
+    """Guards the counts: 40 Tier A ids (A01-A40); Tier B ids B01-B08, of which 5 are still
     strict xfails (B02, B05 and B06 were fixed and promoted to normal tests)."""
     import re
     from pathlib import Path
@@ -588,7 +667,7 @@ def test_the_expected_tier_a_and_b_inventory():
     source = Path(__file__).read_text(encoding="utf-8")
     a_ids = {int(m) for m in re.findall(r"^def test_a(\d\d)_", source, flags=re.M)}
     b_ids = {int(m) for m in re.findall(r"^def test_b(\d\d)_", source, flags=re.M)}
-    assert a_ids == set(range(1, 35))
+    assert a_ids == set(range(1, 41))
     assert b_ids == set(range(1, 9))
     assert len(re.findall(r"^@pytest\.mark\.xfail\(strict=True", source, flags=re.M)) == 5
     assert load_config() and build and Image  # imports used above stay referenced
