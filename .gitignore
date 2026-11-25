@@ -17,3 +17,7 @@ __pycache__/
 
 # Personal test photos (not for the repo)
 electronics_classifier/test_images/
+
+# Virtual enviornment
+.venv
+.venv.nosync/
