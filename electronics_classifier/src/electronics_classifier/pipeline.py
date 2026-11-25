@@ -22,7 +22,7 @@ from .extractor import AttributeExtractor, apply_postprocessors
 from .interfaces import BuildContext, FilterContext, ItemContext, PreprocessState
 from .registry import build
 from .renderer import RenderStyle, render_annotated_image, validate_label_template
-from .schemas import ClassificationResult, RawDetection, RunMeta
+from .schemas import ClassificationResult, RawDetection, RunMeta, WarningCode
 from .system_prompt import load_template
 from .trace import PipelineTrace
 
@@ -147,6 +147,7 @@ class ElectronicsClassificationPipeline:
                 template = load_template(template_file)
             except ConfigError as exc:
                 raise ConfigError(f"pipeline.vlm.system_prompt_file: {exc}") from None
+        self.on_not_electronic = pipe["vlm"]["on_not_electronic"]
         self.extractor = AttributeExtractor(
             client, self.ctx.categories, template, pipe["vlm"]["max_retries"]
         )
@@ -170,7 +171,10 @@ class ElectronicsClassificationPipeline:
         pre, state = apply_preprocess(self.image_preprocess, image)
         raw = self.detector.predict(pre)
         mapped = self._map_back(raw, state)
-        dets = sanitize_detections(mapped, width, height, self.ctx.categories)
+        # An open-vocabulary detector (RAM tags) makes its own phrases: do not drop them
+        open_vocab = getattr(self.detector, "open_vocabulary", False)
+        vocabulary = None if open_vocab else self.ctx.categories
+        dets = sanitize_detections(mapped, width, height, vocabulary)
         if trace is not None:
             trace.preprocessed_image = pre
             trace.raw_detections = list(raw)
@@ -205,10 +209,18 @@ class ElectronicsClassificationPipeline:
         # [G] VLM, [H] post-process, [I] warning rules, per item
         attributes_by_id: dict[str, dict] = {}
         warnings_by_id: dict[str, list[str]] = {}
+        kept_items = []
         for index, item in enumerate(items):
             item_id = item.detection.detection_id
             item_ctx = ItemContext(item, index, dets, width, height)
             extraction = self.extractor.extract(item)
+            not_electronic = extraction.attributes.get("is_electronic") is False
+            if not_electronic and self.on_not_electronic == "drop":
+                if trace is not None:
+                    trace.vlm_replies[item_id] = extraction.raw_replies
+                    trace.dropped_not_electronic.append(item_id)
+                continue
+            kept_items.append(item)
             attributes, post_warnings, snapshots = apply_postprocessors(
                 self.attribute_postprocess, extraction.attributes, item_ctx
             )
@@ -216,9 +228,10 @@ class ElectronicsClassificationPipeline:
                 self.warning_rules, make_draft(item, attributes), item_ctx
             )
             attributes_by_id[item_id] = attributes
+            verdict_warnings = [WarningCode.NOT_ELECTRONIC.value] if not_electronic else []
             warnings_by_id[item_id] = unique_in_order(
                 extraction.warnings, segmentation_failed.get(item_id, []), post_warnings,
-                rule_warnings,
+                rule_warnings, verdict_warnings,
             )  # fmt: skip
             if trace is not None:
                 trace.vlm_replies[item_id] = extraction.raw_replies
@@ -227,9 +240,10 @@ class ElectronicsClassificationPipeline:
 
         # [J] assemble, [K] render
         result = assemble_result_payload(
-            items, attributes_by_id, warnings_by_id, width, height, self.meta, self.output_format
-        )
-        masks = {i.detection.detection_id: i.mask for i in items if i.mask is not None}
+            kept_items, attributes_by_id, warnings_by_id, width, height, self.meta,
+            self.output_format,
+        )  # fmt: skip
+        masks = {i.detection.detection_id: i.mask for i in kept_items if i.mask is not None}
         annotated = render_annotated_image(image, result.items, masks, self.style)
         return self._finish(annotated, result, trace)
 

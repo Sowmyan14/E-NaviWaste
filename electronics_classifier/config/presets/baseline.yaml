@@ -1,0 +1,25 @@
+# The previous default pipeline: Grounding DINO prompted with vocabulary.categories, no masks,
+# the vocabulary-locked VLM prompt, and the local Ollama Qwen3-VL client.
+# Kept as a comparison point for the Grounded-SAM + RAM++ default.
+# Usage: --preset baseline   (old fast recipe: --preset baseline --preset fast)
+pipeline:
+  detector:
+    name: grounding_dino
+    params:
+      model_id: "IDEA-Research/grounding-dino-tiny"
+      raw_box_threshold: 0.15
+      raw_text_threshold: 0.15
+      max_prompt_tokens: 256
+
+  segmenter: {name: none, params: {}}
+  segmentation_gate: {name: overlap, params: {iou: 0.15}}
+
+  vlm:
+    client: {name: openai_compatible, params: {base_url: "http://localhost:11434/v1", model: "qwen3-vl:8b-instruct", temperature: 0.0, max_tokens: 256}}
+    system_prompt_file: null
+    on_not_electronic: warn
+
+  attribute_postprocess:
+    - {name: normalize_unknown, params: {max_len: 64}}
+    - {name: ocr_verify_model}
+    - {name: category_vocab}

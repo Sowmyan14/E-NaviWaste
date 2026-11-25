@@ -421,6 +421,6 @@ def test_list_components_lists_every_builtin(capsys):
         assert kind in out
         for name in registered_names(kind):
             assert f"  {name}\n" in out
-    for must in ("grounding_dino", "fake", "sam", "sam2", "transformers", "openai_compatible",
-                 "category_oov", "category_mismatch"):
+    for must in ("grounding_dino", "ram_grounding_dino", "fake", "sam", "sam2", "hf_sam",
+                 "transformers", "openai_compatible", "category_oov", "category_mismatch"):
         assert must in out

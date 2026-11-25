@@ -26,7 +26,11 @@ from .renderer import ascii_only
 from .schemas import ClassificationResult, RawDetection
 from .trace import PipelineTrace
 
-FAKE_SETS = ("pipeline.detector.name=fake", "pipeline.vlm.client.name=fake")
+FAKE_SETS = (
+    "pipeline.detector.name=fake",
+    "pipeline.segmenter.name=none",
+    "pipeline.vlm.client.name=fake",
+)
 HEIC_SUFFIXES = frozenset({".heic", ".heif"})
 HEIC_HINT = "pip install electronics-classifier[heic]"
 RAW_SUFFIXES = frozenset({".dng"})  # Android "Pro"/RAW mode; not decoded by this project

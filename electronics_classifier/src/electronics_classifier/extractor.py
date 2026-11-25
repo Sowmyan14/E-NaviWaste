@@ -26,6 +26,9 @@ USER_TEXT = (
     "Image 1 is the device crop. Image 2 (if present) is the full scene for context only; "
     "describe only the device in Image 1."
 )
+PHRASE_HINT = (
+    " The detector proposed the label '{phrase}'; treat it as a hint to check, not as a fact."
+)
 RETRY_REMINDER = (
     "Return ONLY valid JSON: a single object with the keys brand, model, category, color."
 )
@@ -44,15 +47,38 @@ def _scalar_to_text(value: Any) -> str:
 
 Scalar = Annotated[str, BeforeValidator(_scalar_to_text)]
 
+_TRUE_WORDS = frozenset({"true", "yes", "y", "1"})
+_FALSE_WORDS = frozenset({"false", "no", "n", "0"})
+
+
+def _flag_or_none(value: Any) -> bool | None:
+    """A yes/no answer as a bool. Missing, null or unreadable answers are ``None`` (unknown)."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        word = value.strip().lower()
+        if word in _TRUE_WORDS:
+            return True
+        if word in _FALSE_WORDS:
+            return False
+    return None
+
+
+Flag = Annotated[bool | None, BeforeValidator(_flag_or_none)]
+
 
 class VLMReply(BaseModel):
-    """The four attributes. Extra keys are ignored; missing keys become ``unknown``."""
+    """The four attributes plus the optional ``is_electronic`` verdict.
+
+    Extra keys are ignored; missing keys become ``unknown``; a missing verdict is ``None``.
+    """
 
     model_config = ConfigDict(extra="ignore")
     brand: Scalar = "unknown"
     model: Scalar = "unknown"
     category: Scalar = "unknown"
     color: Scalar = "unknown"
+    is_electronic: Flag = None
 
 
 def find_json_value(text: str) -> Any:
@@ -85,9 +111,12 @@ def parse_reply(text: object) -> Attributes | None:
     if not isinstance(value, dict):
         return None
     try:
-        return VLMReply.model_validate(value).model_dump()
+        attributes = VLMReply.model_validate(value).model_dump()
     except ValidationError:
         return None
+    if attributes["is_electronic"] is None:
+        del attributes["is_electronic"]  # no verdict given: keep the four-key shape
+    return attributes
 
 
 def fallback_attributes() -> Attributes:
@@ -121,12 +150,13 @@ class AttributeExtractor:
         self.system_prompt = build_vlm_system_prompt(categories, template)
 
     def extract(self, item: PreparedItem) -> ExtractionResult:
+        base_text = USER_TEXT + PHRASE_HINT.format(phrase=item.detection.phrase)
         images = [item.crop_rgb]  # the crop first, then the full-scene context
         if item.context_rgb is not None:
             images.append(item.context_rgb)
         raw_replies: list[str] = []
         for attempt in range(self.max_retries + 1):
-            user_text = USER_TEXT if attempt == 0 else f"{USER_TEXT}\n{RETRY_REMINDER}"
+            user_text = base_text if attempt == 0 else f"{base_text}\n{RETRY_REMINDER}"
             try:
                 reply = self.client.generate(self.system_prompt, images, user_text)
             except Exception as exc:  # timeouts, OOM...: usually repeatable, so no retry

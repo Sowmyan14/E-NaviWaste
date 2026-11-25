@@ -122,6 +122,7 @@ class CategoryMismatch:
     Only two *specific* categories can disagree: when either side is the generic
     ``electronic device`` (for instance after a VLM fallback) nothing is flagged. A novel
     category (outside the vocabulary) is not flagged either: CATEGORY_NOVEL already reports it.
+    Phrases that share a word (``laptop computer`` and ``laptop``) agree: RAM tags are free text.
     """
 
     Params = _NoParams
@@ -136,5 +137,7 @@ class CategoryMismatch:
         if FALLBACK_CATEGORY in (phrase, category) or phrase == category:
             return []
         if category not in self.categories:
+            return []
+        if set(phrase.split()) & set(category.split()):
             return []
         return [WarningCode.CATEGORY_MISMATCH.value]

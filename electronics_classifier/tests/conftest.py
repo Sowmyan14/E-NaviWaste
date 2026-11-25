@@ -122,7 +122,8 @@ class TinyDetector:
 
 @pytest.fixture
 def resolved_config() -> dict:
-    return load_config()
+    # The existing component tests describe the vocabulary-prompted pipeline, i.e. `baseline`.
+    return load_config(["baseline"])
 
 
 @pytest.fixture
@@ -147,10 +148,16 @@ WITHOUT_OCR = (
 
 
 def make_pipeline(detections=None, replies=None, sets=(), presets=(), ocr=False, **components):
-    """A pipeline whose detector and VLM are scripted fakes (unless passed explicitly)."""
+    """A pipeline whose detector and VLM are scripted fakes (unless passed explicitly).
+
+    It starts from the `baseline` preset (no masks, no RAM checkpoint needed), then applies
+    ``presets`` and ``sets`` on top.
+    """
     from electronics_classifier.pipeline import ElectronicsClassificationPipeline
 
     components.setdefault("detector", FakeDetector(detections))
     components.setdefault("vlm_client", FakeVLMClient(replies or [VALID_REPLY], cycle=True))
     sets = list(sets) if ocr else [WITHOUT_OCR, *sets]  # a later --set still wins
-    return ElectronicsClassificationPipeline(presets=presets, sets=sets, **components)
+    return ElectronicsClassificationPipeline(
+        presets=["baseline", *presets], sets=sets, **components
+    )

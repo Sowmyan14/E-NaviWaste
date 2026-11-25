@@ -5,7 +5,8 @@ files below to this folder. A test whose photo is missing is **skipped** with a 
 the file, so you can add photos one at a time. Run them with real weights installed:
 
 ```bash
-pip install -e '.[dino,vlm,dev]'
+pip install -e '.[dino,vlm,dev]'      # C01-C14 (baseline preset)
+pip install -e '.[grounded,vlm,dev]'   # C15-C17 (default pipeline; also needs the RAM++ checkpoint)
 pytest tests/slow -m slow -s      # -s shows the printed runtimes and results
 ```
 
@@ -29,6 +30,9 @@ to commit them (they are plain JPEGs; keep them small).
 | C12 | `two_routers_overlapping.jpg` | Two identical routers side by side, one partly hidden | Two items |
 | C13 | `router_glare.jpg` | A router photo covered by strong glare | The router is detected; unreadable fields are `unknown` |
 | C14 | `store_shelf_30_devices.jpg` | A shelf or screenshot with 30 or more small electronics | At most 20 items (`top_k`), no crash; the runtime is printed |
+| C15 | `kitchen_toaster_kettle.jpg` | (same photo as C01) | Default pipeline: RAM++ finds the kettle or toaster, so at least one item has category `kettle` or `toaster` |
+| C16 | `empty_room.jpg` | A room with a floor, walls and a table, and no electronics | No items: scene tags are boxed by DINO but dropped by the VLM `is_electronic` verdict |
+| C17 | `poster_smartphone.jpg` | (same photo as C03) | Default pipeline: no item, because the VLM says a picture of a phone is not electronic |
 
 `router_clear_label.jpg` is also the base image that C07-style darkening and C08 degradation
 are derived from when the dedicated photo is missing.
