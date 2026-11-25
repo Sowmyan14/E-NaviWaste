@@ -13,6 +13,14 @@ ruff
 transformers
 torch
 
+[grounded]
+transformers
+torch
+torchvision
+timm
+fairscale
+ram @ git+https://github.com/xinyu1205/recognize-anything.git
+
 [heic]
 pillow-heif
 

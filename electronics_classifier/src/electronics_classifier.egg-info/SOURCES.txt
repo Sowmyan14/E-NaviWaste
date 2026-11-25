@@ -28,8 +28,10 @@ src/electronics_classifier/components/segmenters.py
 src/electronics_classifier/components/vlm_clients.py
 src/electronics_classifier/components/warning_rules.py
 src/electronics_classifier/components/detectors/__init__.py
+src/electronics_classifier/components/detectors/_ram_compat.py
 src/electronics_classifier/components/detectors/fake.py
 src/electronics_classifier/components/detectors/grounding_dino.py
+src/electronics_classifier/components/detectors/ram_grounding_dino.py
 tests/test_assembler_warnings.py
 tests/test_batch_runner.py
 tests/test_config_layering.py
@@ -37,8 +39,12 @@ tests/test_crop_builder.py
 tests/test_detection_filters.py
 tests/test_extractor_and_postprocess.py
 tests/test_failure_modes.py
+tests/test_hf_sam_segmenter.py
 tests/test_image_loading.py
 tests/test_image_preprocess.py
 tests/test_pipeline_e2e_mocked.py
+tests/test_ram_compat.py
+tests/test_ram_detector.py
 tests/test_registry.py
 tests/test_renderer.py
+tests/test_vlm_validation.py
