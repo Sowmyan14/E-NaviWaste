@@ -33,7 +33,7 @@ Python 3.10 to 3.12.
 
 ```bash
 pip install -e .            # core: numpy, opencv, Pillow, pydantic, pyyaml, supervision
-pip install -e '.[grounded]' # default detector + masks: RAM++ (git), Grounding DINO, SAM, torch
+pip install -e '.[grounded]' # default detector + masks: RAM++ (`ram`, from git), Grounding DINO, SAM, torch, timm
 pip install -e '.[dino]'    # Grounding DINO alone (the `baseline` preset): transformers, torch
 pip install -e '.[vlm]'     # default VLM client: transformers, torch, torchvision, qwen-vl-utils
 pip install -e '.[server]'  # VLM through LM Studio / Ollama / any OpenAI-compatible server
@@ -58,13 +58,20 @@ Until the file exists, building the default pipeline fails with a `ConfigError` 
 `pipeline.detector.params.ram_checkpoint`; `--preset baseline` runs without it. Grounding DINO and
 SAM weights come from Hugging Face on first use.
 
-- `recognize-anything` is installed from GitHub and pins `timm==0.4.12` and `fairscale==0.4.4`,
-  which can clash with a very new torch. If the install fails, use a fresh environment.
-- On a Mac (device `mps`) the unsupported ops fall back to the CPU (`mps_fallback`, on by default).
-  If RAM++ still fails on the GPU, set `pipeline.detector.params.ram_on_cpu=true`; it tags only one
-  image per run, so the cost is small. `ram_half=true` runs RAM++ in float16 to save memory.
-- On a 16 GB machine the default pipeline plus an 8B VLM is tight. Unload the VLM between runs
-  (Ollama `keep_alive`) or use `--preset fast` (2B VLM).
+- `recognize-anything` installs from GitHub under the package name `ram`. It declares no
+  dependencies (its `requirements.txt` pins `timm==0.4.12`, which no longer installs), so the
+  `grounded` extra lists `timm` and `fairscale` unpinned. It was written for `transformers` 4.x:
+  `components/detectors/_ram_compat.py` restores the few names that `transformers` 5.x removed
+  (each shim only applies when the name is missing). It was checked on `transformers` 5.24,
+  `timm` 1.0.31 and torch 2.15; remove the module when `ram` supports 5.x.
+- On a Mac (device `mps`) unsupported ops fall back to the CPU (`mps_fallback`, on by default) and
+  SAM inputs are cast to float32, because Apple GPUs have no float64. If RAM++ still fails on the
+  GPU, set `pipeline.detector.params.ram_on_cpu=true`; it tags only one image per run.
+  `ram_half=true` runs RAM++ in float16 to save memory.
+- Measured on an M2 with 16 GB: building the pipeline takes about 14 s, then RAM++ + Grounding
+  DINO take about 1.3 s and SAM about 1.2 s per photo. With an 8B VLM resident in Ollama (5.7 GB)
+  next to other apps the machine swapped and the same stages slowed about 30 times, so unload
+  the VLM between runs or use `--preset fast` (2B VLM).
 
 Heavy packages are imported lazily, so `import electronics_classifier`, the CLI help and the
 whole unit-test suite work with **no GPU, no torch and no weights**. Weights are downloaded by
@@ -365,6 +372,9 @@ These points were not fixed by the plan and were decided with the maintainer:
   treats phrases that share a word (`laptop computer`, `laptop`) as agreeing, because RAM phrases
   are free text; two categories that share a word (`usb hub`, `usb charger`) are therefore not
   flagged.
+- Holes inside a SAM mask are filled (`hf_sam` `fill_holes`, on by default). Otherwise SAM tends
+  to leave a label sticker or camera window out of the mask, and the crop blanks exactly the text
+  that the VLM and OCR need to read the model number.
 - `ram_grounding_dino` keeps phrases outside the vocabulary (it sets `open_vocabulary`), so the
   always-on sanitize step skips its vocabulary check for it. The closed `grounding_dino` detector
   still has phrases outside the vocabulary dropped.

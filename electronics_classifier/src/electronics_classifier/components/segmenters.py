@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 from typing import Any, Literal
 
+import cv2
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -124,6 +125,20 @@ class Sam2Segmenter(_BoxPromptSegmenter):
         return SAM2ImagePredictor(model)
 
 
+def fill_mask_holes(mask: np.ndarray) -> np.ndarray:
+    """Fill holes that are completely inside the mask (the outline is kept as it is).
+
+    SAM often leaves a label sticker or a camera window out of a device's mask. The crop would
+    then blank exactly the text the VLM and OCR need to read.
+    """
+    contours, _ = cv2.findContours(
+        mask.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+    )
+    filled = np.zeros(mask.shape, dtype=np.uint8)
+    cv2.drawContours(filled, contours, -1, 1, thickness=cv2.FILLED)
+    return filled.astype(bool)
+
+
 @register("segmenter", "hf_sam")
 class HfSamSegmenter:
     """Segment Anything from Hugging Face ``transformers``: no checkpoint file to download by hand.
@@ -141,6 +156,10 @@ class HfSamSegmenter:
         mps_fallback: bool = Field(
             default=True,
             description="On Apple GPUs let unsupported ops fall back to the CPU.",
+        )
+        fill_holes: bool = Field(
+            default=True,
+            description="Fill holes inside each mask so label stickers stay visible in the crop.",
         )
 
     def __init__(self, params: Params, build: BuildContext) -> None:
@@ -169,7 +188,11 @@ class HfSamSegmenter:
 
         inputs = self._processor(
             images=Image.fromarray(image_rgb), input_boxes=[boxes], return_tensors="pt"
-        ).to(self.device)
+        )
+        for key, value in list(inputs.items()):  # Apple GPUs (mps) have no float64
+            if getattr(value, "dtype", None) == self._torch.float64:
+                inputs[key] = value.to(self._torch.float32)
+        inputs = inputs.to(self.device)
         with self._torch.no_grad():
             outputs = self._model(**inputs, multimask_output=False)
         masks = self._processor.image_processor.post_process_masks(
@@ -177,7 +200,8 @@ class HfSamSegmenter:
             inputs["original_sizes"].cpu(),
             inputs["reshaped_input_sizes"].cpu(),
         )[0]  # (n_boxes, 1, H, W)
-        return [np.asarray(m[0]).astype(bool) for m in masks]
+        result = [np.asarray(m[0]).astype(bool) for m in masks]
+        return [fill_mask_holes(m) for m in result] if self.params.fill_holes else result
 
     def segment(self, image_rgb: np.ndarray, boxes_xyxy: np.ndarray) -> list[np.ndarray | None]:
         boxes = np.asarray(boxes_xyxy, dtype=np.float32).reshape(-1, 4).tolist()

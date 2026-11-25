@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 from conftest import VALID_REPLY, det, make_image, make_pipeline
 
-from electronics_classifier.components.segmenters import HfSamSegmenter
+from electronics_classifier.components.segmenters import HfSamSegmenter, fill_mask_holes
 from electronics_classifier.interfaces import BuildContext
 from electronics_classifier.registry import build, registered_names
 
@@ -21,6 +21,18 @@ def box_mask(box):
     x1, y1, x2, y2 = (int(v) for v in box)
     mask[y1:y2, x1:x2] = True
     return mask
+
+
+def test_enclosed_holes_are_filled_but_the_outline_and_open_notches_are_kept():
+    mask = np.zeros((40, 60), dtype=bool)
+    mask[5:35, 5:55] = True
+    mask[15:20, 20:30] = False  # a sticker-sized hole fully inside
+    mask[5:10, 40:45] = False  # a notch open to the outside edge
+    filled = fill_mask_holes(mask)
+    assert filled[15:20, 20:30].all()  # the hole is gone
+    assert not filled[5:10, 40:45].any()  # the notch is not a hole: it stays out
+    assert not filled[0:4, :].any() and filled[34, 6]  # the outline is untouched
+    assert fill_mask_holes(np.zeros((8, 8), dtype=bool)).sum() == 0  # an empty mask stays empty
 
 
 class StubSam(HfSamSegmenter):
@@ -122,3 +134,74 @@ def test_masks_reach_the_crop_and_a_missing_mask_becomes_a_warning():
     assert "SEGMENTATION_FAILED" not in by_phrase["router"].warnings
     assert "SEGMENTATION_FAILED" in by_phrase["laptop"].warnings
     assert annotated.shape == (H, W, 3)
+
+
+def test_float64_processor_outputs_are_cast_to_float32_before_reaching_the_device():
+    """Apple GPUs (mps) cannot hold float64 tensors, which the HF SAM processor produces."""
+    torch = pytest.importorskip("torch")
+    seen = {}
+
+    class Batch(dict):
+        def to(self, device):
+            seen.update({k: v.dtype for k, v in self.items()})
+            return self
+
+    class Processor:
+        class image_processor:  # noqa: N801
+            @staticmethod
+            def post_process_masks(pred, original, reshaped):
+                return [torch.ones(1, 1, H, W, dtype=torch.bool)]
+
+        def __call__(self, images, input_boxes, return_tensors):
+            return Batch(
+                pixel_values=torch.zeros(1, 3, 4, 4, dtype=torch.float64),
+                input_boxes=torch.zeros(1, 1, 4, dtype=torch.float64),
+                original_sizes=torch.tensor([[H, W]]),
+                reshaped_input_sizes=torch.tensor([[H, W]]),
+            )
+
+    class Model:
+        def __call__(self, **inputs):
+            return type("Out", (), {"pred_masks": torch.zeros(1)})()
+
+    sam = HfSamSegmenter.__new__(HfSamSegmenter)
+    sam.params = HfSamSegmenter.Params()
+    sam.device, sam._torch, sam._processor, sam._model = "cpu", torch, Processor(), Model()
+    [mask] = sam._masks(IMAGE, [[1.0, 1.0, 5.0, 5.0]])
+    assert mask.shape == (H, W) and mask.dtype == bool
+    assert seen["pixel_values"] == torch.float32 and seen["input_boxes"] == torch.float32
+    assert seen["original_sizes"] == torch.int64  # integer tensors are left alone
+
+
+@pytest.mark.parametrize(("fill", "hole_visible"), [(True, True), (False, False)])
+def test_the_fill_holes_parameter_controls_whether_hf_sam_fills_them(fill, hole_visible):
+    torch = pytest.importorskip("torch")
+    ring = np.zeros((H, W), dtype=bool)
+    ring[10:100, 10:190] = True
+    ring[40:60, 50:90] = False
+
+    class Processor:
+        class image_processor:  # noqa: N801
+            @staticmethod
+            def post_process_masks(pred, original, reshaped):
+                return [torch.from_numpy(ring)[None, None]]
+
+        def __call__(self, images, input_boxes, return_tensors):
+            class Batch(dict):
+                def to(self, device):
+                    return self
+
+            return Batch(
+                original_sizes=torch.tensor([[H, W]]),
+                reshaped_input_sizes=torch.tensor([[H, W]]),
+            )
+
+    class Model:
+        def __call__(self, **inputs):
+            return type("Out", (), {"pred_masks": torch.zeros(1)})()
+
+    sam = HfSamSegmenter.__new__(HfSamSegmenter)
+    sam.params = HfSamSegmenter.Params(fill_holes=fill)
+    sam.device, sam._torch, sam._processor, sam._model = "cpu", torch, Processor(), Model()
+    [mask] = sam._masks(IMAGE, [[10.0, 10.0, 190.0, 100.0]])
+    assert bool(mask[50, 70]) is hole_visible
