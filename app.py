@@ -1,5 +1,3 @@
-# Local URL: http://localhost:8501
-
 import hashlib
 import io
 import os
@@ -28,7 +26,7 @@ from ewaste_locator.find_recyclers import (
 
 pillow_heif.register_heif_opener()  # lets Pillow (and so load_image) read iPhone HEIC photos
 
-st.set_page_config(page_title="E-NaviWaste", layout="wide")
+st.set_page_config(page_title="NavE-Waste", layout="wide")
 
 DEVICE_TYPES = [
     "Phone", "Laptop", "Tablet", "Television", "Router", "Hard Drive", "Smartwatch", "Modem", "Smart Speaker",
@@ -111,7 +109,7 @@ def run_pipeline(device: str, zip_code: str) -> dict:
         "dropoff_error": dropoff_error,
     }
 
-st.title("E-NaviWaste")
+st.title("NavE=Waste")
 st.caption("Upload an image of your old device to get safe wipe steps and nearby drop-off sites")
 
 with st.sidebar:
