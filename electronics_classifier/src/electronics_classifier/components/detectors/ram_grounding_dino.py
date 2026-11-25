@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import os
+import warnings
 from collections.abc import Iterable
 
 import numpy as np
@@ -39,6 +40,8 @@ DEFAULT_DROP_TAGS = (
     "floor", "wall", "ceiling", "table", "desk", "shelf", "chair", "couch", "sofa", "bed",
     "cabinet", "counter", "surface", "wood", "wooden", "wood floor", "carpet", "rug",
     "sit", "stand", "lay", "hold", "place", "use", "face", "close-up", "top",
+    "attach", "charge", "connect", "plug", "power", "work", "show", "display", "wear", "turn",
+    "counter top", "countertop", "marble", "blanket", "tile", "tiled", "pillow", "cloth",
 )  # fmt: skip
 
 
@@ -124,8 +127,16 @@ class RamGroundingDinoDetector(GroundingDinoDetector):
     def _load_ram(self) -> None:
         try:
             import torch
-            from ram import get_transform, inference_ram
-            from ram.models import ram_plus
+
+            from ._ram_compat import patch_ram_tokenizer, patch_transformers
+
+            patch_transformers()  # ram predates transformers 5: see _ram_compat
+            with warnings.catch_warnings():  # ram imports timm paths that timm now flags
+                warnings.simplefilter("ignore", FutureWarning)
+                from ram import get_transform, inference_ram
+                from ram.models import ram_plus
+
+            patch_ram_tokenizer()
         except ImportError as exc:
             raise ImportError(
                 "the ram_grounding_dino detector needs recognize-anything, torch and "

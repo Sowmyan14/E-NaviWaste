@@ -150,7 +150,8 @@ list immediately.
 ### [D] Segment (`segmenter` + `segmentation_gate`)
 Default segmenter is `hf_sam` (Segment Anything from Hugging Face `transformers`, no checkpoint
 file). The **gate** (`always` by default) decides which items get a mask, and the segmenter is
-prompted with those boxes, all in one model call. If that call fails each box is retried alone,
+prompted with those boxes, all in one model call. Holes enclosed by a mask are filled
+(`fill_holes`), so a label sticker is not blanked out of the crop. If that call fails each box is retried alone,
 so one bad box loses only its own mask. With `segmenter: none` (the baseline) this stage does
 nothing and the gate is never consulted; `sam` and `sam2` are the checkpoint-file alternatives. Masks exist to blank out a neighbouring device
 that overlaps the crop. If an approved item ends up with no usable mask, the item gets a
@@ -378,8 +379,10 @@ Find your goal below, then touch only what is listed.
 - RAM tags are noisy. The stoplist and the VLM verdict catch most scene objects, but an unusual
   one can reach the VLM, which costs a model call.
 - `category_mismatch` treats phrases that share a word as agreeing (`usb hub` vs `usb charger`).
-- RAM++ on Apple GPUs relies on CPU fallback for unsupported ops and has not been verified on
-  every Mac; `ram_on_cpu` is the escape hatch. `recognize-anything` pins old `timm` and `fairscale`.
+- `recognize-anything` (`ram`) targets `transformers` 4.x. `detectors/_ram_compat.py` patches the
+  removed names so it runs on 5.x; a future `transformers` release could break it again.
+- RAM++ and SAM run on Apple GPUs (`mps`) with CPU fallback for unsupported ops; `ram_on_cpu` is
+  the escape hatch. With an 8B VLM resident at the same time, a 16 GB Mac swaps and slows down.
 - `containment` can drop a real device lying fully inside another's box (a charger on a power
   strip's box).
 - Very small objects in very large photos can be missed after `resize_max_side` shrinks the
