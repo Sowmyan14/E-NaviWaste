@@ -241,6 +241,20 @@ any output can be traced to the config that made it.
 `run()` returns `(annotated_rgb, ClassificationResult)`, or with `return_trace=True`,
 `(annotated_rgb, result, PipelineTrace)`.
 
+### Two halves: `detect()` and `classify()`
+`run()` is `classify(detect(image))`. The two halves can be called separately:
+
+- `detect(image, trace=None) -> DetectedImage` runs stages [A]-[F] (RAM++, DINO, filters, SAM,
+  crops). It needs the detector and segmenter, never the VLM.
+- `classify(detected, trace=None) -> (annotated, result)` runs [G]-[K] (VLM, post-processing,
+  warnings, assembly, drawing). It never touches the detector or segmenter.
+- `release_detection_models()` drops the detector and segmenter. After it only `classify()` works.
+
+Use this to process a batch in two passes (detect every photo, release the models, then run the
+VLM on all of them). On a 16 GB machine this keeps the detection models and an 8B VLM from
+needing memory at the same time. A `DetectedImage` holds crops and masks, not model state, and
+gives the same result as `run()` (`tests/test_two_phase.py`).
+
 ## 5. Data flow: what each stage hands to the next
 
 ```text
@@ -366,7 +380,9 @@ Find your goal below, then touch only what is listed.
   that is the first place to look if VLM latency matters.
 - **The VLM is not trusted for model numbers.** It is told to answer `unknown` unless the
   exact name is printed, and `ocr_verify_model` then checks the claim against OCR. Brands are
-  not OCR-checked because they can come from logos.
+  not OCR-checked, and the default prompt asks the VLM to infer a brand from distinctive
+  features and scene context as well as logos, using `unknown` only when there is no evidence.
+  A brand is therefore more often a best guess than a model is.
 - **Tests mirror the structure.** `tests/test_failure_modes.py` holds hostile-input cases
   (Tier A) and known weaknesses as strict `xfail` tests (Tier B); `tests/slow/` needs real
   models. Run `pytest -q` after any change; it needs no GPU.

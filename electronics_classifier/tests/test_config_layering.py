@@ -55,6 +55,14 @@ def test_baseline_preset_restores_the_previous_default_pipeline():
     ]  # fmt: skip
 
 
+def test_the_default_vocabulary_has_no_appliance_fallback_but_baseline_keeps_the_old_one():
+    default = load_config()["vocabulary"]["categories"]
+    baseline = load_config(["baseline"])["vocabulary"]["categories"]
+    assert "appliance" not in default and "electronic device" in default  # generic fallback stays
+    assert "appliance" in baseline  # baseline still reproduces the old pipeline
+    assert [c for c in baseline if c != "appliance"] == default  # and differs by that one entry
+
+
 def test_baseline_leaves_the_shared_stages_untouched():
     default, baseline = load_config()["pipeline"], load_config(["baseline"])["pipeline"]
     for key in ("detection_filters", "image_preprocess", "crop", "warning_rules"):

@@ -74,6 +74,48 @@ def test_the_validate_prompt_loads_and_asks_for_the_verdict():
     assert "{categories}" in template and "is_electronic" in template
 
 
+def default_prompt_text():
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    return (root / "config" / "prompts" / "vlm_validate_prompt.txt").read_text(encoding="utf-8")
+
+
+def test_the_prompt_tells_the_vlm_to_infer_the_brand_from_features_and_context():
+    text = default_prompt_text()
+    brand_rules = [line for line in text.splitlines() if line.startswith('- "brand"')]
+    assert len(brand_rules) == 1
+    rule = brand_rules[0].lower()
+    for clue in ("logo", "distinctive features", "kind of object", "context"):
+        assert clue in rule
+    assert "accessories" in rule and "nearby" in rule  # scene context examples
+
+
+def test_the_prompt_makes_an_unknown_brand_the_exception_not_the_default():
+    text = default_prompt_text()
+    assert "Give your best-supported brand even when no logo is visible" in text
+    assert '"unknown" is the exception, not the default' in text
+    assert "Do not name a brand from a hunch" in text  # still no invented brands
+    assert "Never guess a brand" not in text  # the old blanket ban is gone
+
+
+def test_the_model_number_rule_stays_strict_and_the_example_does_not_teach_unknown_brand():
+    text = default_prompt_text()
+    assert "Never fabricate or infer a model number" in text
+    assert 'Write a "model" only if its exact name or number is printed' in text
+    example = [line for line in text.splitlines() if line.startswith('{"is_electronic"')]
+    assert len(example) == 1 and '"brand": "unknown"' not in example[0]
+    assert 'If "model" or "color" cannot be read' in text  # the generic unknown rule skips brand
+
+
+def test_the_legacy_prompts_used_by_baseline_still_forbid_guessing_a_brand():
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1] / "config" / "prompts"
+    assert "Never guess a brand" in (root / "vlm_system_prompt.txt").read_text(encoding="utf-8")
+    assert "Never guess a brand" in (root / "vlm_open_vocab_prompt.txt").read_text(encoding="utf-8")
+
+
 def test_the_builtin_prompt_loads_from_any_working_directory(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     assert "is_electronic" in load_template("config/prompts/vlm_validate_prompt.txt")
