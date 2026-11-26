@@ -64,7 +64,9 @@ USE_FAKES = os.environ.get("EC_USE_FAKES") == "1"
 def get_classifier():
     """Load the models once and share them. The lock keeps it to one photo at a time."""
     sets = list(FAKE_SETS) if USE_FAKES else []
-    return ElectronicsClassificationPipeline(sets=sets), threading.Lock()
+    # `baseline` is the vocabulary-prompted Grounding DINO pipeline. The default is now Grounded-SAM
+    # + RAM++, which needs the RAM++ checkpoint; switch this once that is installed.
+    return ElectronicsClassificationPipeline(presets=["baseline"], sets=sets), threading.Lock()
 
 
 # Keyed on the photo, so a rerun during a slow classification waits for it instead of repeating it.

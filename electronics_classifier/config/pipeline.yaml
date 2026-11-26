@@ -19,7 +19,6 @@ vocabulary:
     - webcam
     - usb hub
     - cable
-    - appliance
     - electronic device
 
 pipeline:
@@ -27,13 +26,17 @@ pipeline:
     - {name: ensure_rgb_uint8}
     - {name: resize_max_side, params: {max_side: 1280}}
 
+  # RAM++ tags the photo, Grounding DINO boxes the tags, hf_sam (below) masks the boxes.
+  # The previous vocabulary-prompted pipeline is kept as `--preset baseline`.
   detector:
-    name: grounding_dino
+    name: ram_grounding_dino
     params:
+      ram_checkpoint: "checkpoints/ram_plus_swin_large_14m.pth"   # download it first (see README)
       model_id: "IDEA-Research/grounding-dino-tiny"
-      raw_box_threshold: 0.15             # LOW floor; real thresholding happens in detection_filters
-      raw_text_threshold: 0.15
-      max_prompt_tokens: 256              # vocabulary is chunked into several prompts if it exceeds this
+      raw_box_threshold: 0.25             # floor; real thresholding happens in detection_filters
+      raw_text_threshold: 0.2
+      max_prompt_tokens: 256              # the tag list is chunked into several prompts above this
+      include_vocabulary: true            # also prompt with vocabulary.categories
 
   detection_filters:                      # applied in order; reorder/remove/add freely
     - {name: score_threshold,  params: {min_score: 0.25}}
@@ -44,8 +47,8 @@ pipeline:
     - {name: containment,      params: {min_containment: 0.90}}   # drop parts (lens, label) inside a device box
     - {name: top_k,            params: {k: 20}}
 
-  segmenter: {name: none, params: {}}     # or: {name: sam, params: {checkpoint: ..., model_type: vit_b}}
-  segmentation_gate: {name: overlap, params: {iou: 0.15}}   # only consulted when segmenter != none
+  segmenter: {name: hf_sam, params: {model_id: "facebook/sam-vit-base"}}   # or: none, sam, sam2
+  segmentation_gate: {name: always}       # only consulted when segmenter != none
 
   crop:
     padding_ratio: 0.12                   # per side, relative to box w/h
@@ -58,12 +61,13 @@ pipeline:
   vlm:
     client: {name: openai_compatible, params: {base_url: "http://localhost:11434/v1", model: "qwen3-vl:8b-instruct", temperature: 0.0, max_tokens: 256}}   # local Ollama
     max_retries: 1
-    system_prompt_file: null              # null = built-in prompt; else path to a template with {categories}
+    system_prompt_file: config/prompts/vlm_validate_prompt.txt   # null = built-in prompt; else a template with {categories}
+    on_not_electronic: drop               # drop | warn: what to do with an item the VLM says is not a device
 
   attribute_postprocess:
     - {name: normalize_unknown, params: {max_len: 64}}
     - {name: ocr_verify_model}            # model names are kept only if OCR can read them (loaded lazily)
-    - {name: category_vocab}              # out-of-vocab category -> "electronic device" + CATEGORY_OUT_OF_VOCAB
+    - {name: category_open, params: {max_len: 48, max_words: 4}}   # novel category kept + CATEGORY_NOVEL
 
   warning_rules:
     - {name: unknown_field}               # BRAND_UNKNOWN / MODEL_UNKNOWN / COLOR_UNKNOWN

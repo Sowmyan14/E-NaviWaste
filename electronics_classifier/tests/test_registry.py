@@ -111,7 +111,7 @@ def test_import_and_load_builtin_pull_in_no_heavy_dependencies():
         "import sys, electronics_classifier;"
         "from electronics_classifier.registry import load_builtin;"
         "load_builtin();"
-        "heavy = {'torch', 'transformers', 'ultralytics', 'segment_anything', 'sam2'};"
+        "heavy = {'torch', 'transformers', 'ultralytics', 'segment_anything', 'sam2', 'ram'};"
         "loaded = heavy & set(sys.modules);"
         "assert not loaded, loaded"
     )

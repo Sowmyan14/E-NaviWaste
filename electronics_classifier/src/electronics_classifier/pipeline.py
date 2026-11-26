@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -22,7 +23,7 @@ from .extractor import AttributeExtractor, apply_postprocessors
 from .interfaces import BuildContext, FilterContext, ItemContext, PreprocessState
 from .registry import build
 from .renderer import RenderStyle, render_annotated_image, validate_label_template
-from .schemas import ClassificationResult, RawDetection, RunMeta
+from .schemas import ClassificationResult, PreparedItem, RawDetection, RunMeta, WarningCode
 from .system_prompt import load_template
 from .trace import PipelineTrace
 
@@ -48,6 +49,20 @@ RunOutput = (
 
 def _name(component: object, spec_name: str | None) -> str:
     return spec_name if spec_name is not None else f"injected:{type(component).__name__}"
+
+
+@dataclass
+class DetectedImage:
+    """What the detection half ``detect()`` hands to the VLM half ``classify()``.
+
+    It holds crops and masks, no model state, so many of them can be kept while the detection
+    models are freed (see ``release_detection_models``).
+    """
+
+    image: np.ndarray  # the validated original photo
+    detections: list[RawDetection]  # after filters, with ids
+    items: list[PreparedItem]  # one per detection: crop, context, mask
+    segmentation_failed: dict[str, list[str]] = field(default_factory=dict)
 
 
 class ElectronicsClassificationPipeline:
@@ -147,6 +162,7 @@ class ElectronicsClassificationPipeline:
                 template = load_template(template_file)
             except ConfigError as exc:
                 raise ConfigError(f"pipeline.vlm.system_prompt_file: {exc}") from None
+        self.on_not_electronic = pipe["vlm"]["on_not_electronic"]
         self.extractor = AttributeExtractor(
             client, self.ctx.categories, template, pipe["vlm"]["max_retries"]
         )
@@ -162,15 +178,35 @@ class ElectronicsClassificationPipeline:
     def run(
         self, image_rgb: np.ndarray, return_trace: bool = False
     ) -> RunOutput:
-        image = validate_image(image_rgb)  # ValueError for anything but (H, W, 3) uint8
+        """Classify one photo: ``detect()`` (stages A-F) then ``classify()`` (stages G-K)."""
         trace = PipelineTrace() if return_trace else None
+        annotated, result = self.classify(self.detect(image_rgb, trace), trace)
+        return self._finish(annotated, result, trace)
+
+    def detect(
+        self, image_rgb: np.ndarray, trace: PipelineTrace | None = None
+    ) -> DetectedImage:
+        """Stages [A]-[F]: boxes, filters, masks and crops. Uses the detector and segmenter.
+
+        Calling ``detect`` for every photo first and ``classify`` afterwards keeps the detection
+        models and the VLM from needing memory at the same time.
+        """
+        if self.detector is None or self.segmenter is None:
+            raise RuntimeError(
+                "the detection models were released (release_detection_models); "
+                "build a new pipeline to detect again"
+            )
+        image = validate_image(image_rgb)  # ValueError for anything but (H, W, 3) uint8
         height, width = image.shape[:2]
 
         # [A] pre-process, [B] detect, then back to original pixels
         pre, state = apply_preprocess(self.image_preprocess, image)
         raw = self.detector.predict(pre)
         mapped = self._map_back(raw, state)
-        dets = sanitize_detections(mapped, width, height, self.ctx.categories)
+        # An open-vocabulary detector (RAM tags) makes its own phrases: do not drop them
+        open_vocab = getattr(self.detector, "open_vocabulary", False)
+        vocabulary = None if open_vocab else self.ctx.categories
+        dets = sanitize_detections(mapped, width, height, vocabulary)
         if trace is not None:
             trace.preprocessed_image = pre
             trace.raw_detections = list(raw)
@@ -188,10 +224,7 @@ class ElectronicsClassificationPipeline:
             trace.detections = list(dets)
 
         if not dets:
-            result = assemble_result_payload(
-                [], {}, {}, width, height, self.meta, self.output_format
-            )
-            return self._finish(image.copy(), result, trace)
+            return DetectedImage(image, [], [])
 
         # [D] segmentation, [E] crops, [F] crop transforms
         outcome = segment_approved(self.segmenter, self.segmentation_gate, image, dets)
@@ -201,14 +234,39 @@ class ElectronicsClassificationPipeline:
         segmentation_failed = segmentation_warnings(outcome, items)
         if trace is not None:
             trace.prepared_items = list(items)
+        return DetectedImage(image, dets, items, segmentation_failed)
+
+    def classify(
+        self, detected: DetectedImage, trace: PipelineTrace | None = None
+    ) -> tuple[np.ndarray, ClassificationResult]:
+        """Stages [G]-[K]: VLM, post-processing, warnings, assembly and rendering.
+
+        Needs only the VLM client and the cheap rule components, not the detection models.
+        """
+        image, dets, items = detected.image, detected.detections, detected.items
+        segmentation_failed = detected.segmentation_failed
+        height, width = image.shape[:2]
+        if not items:  # nothing was detected: the original photo, no items
+            result = assemble_result_payload(
+                [], {}, {}, width, height, self.meta, self.output_format
+            )
+            return image.copy(), result
 
         # [G] VLM, [H] post-process, [I] warning rules, per item
         attributes_by_id: dict[str, dict] = {}
         warnings_by_id: dict[str, list[str]] = {}
+        kept_items = []
         for index, item in enumerate(items):
             item_id = item.detection.detection_id
             item_ctx = ItemContext(item, index, dets, width, height)
             extraction = self.extractor.extract(item)
+            not_electronic = extraction.attributes.get("is_electronic") is False
+            if not_electronic and self.on_not_electronic == "drop":
+                if trace is not None:
+                    trace.vlm_replies[item_id] = extraction.raw_replies
+                    trace.dropped_not_electronic.append(item_id)
+                continue
+            kept_items.append(item)
             attributes, post_warnings, snapshots = apply_postprocessors(
                 self.attribute_postprocess, extraction.attributes, item_ctx
             )
@@ -216,9 +274,10 @@ class ElectronicsClassificationPipeline:
                 self.warning_rules, make_draft(item, attributes), item_ctx
             )
             attributes_by_id[item_id] = attributes
+            verdict_warnings = [WarningCode.NOT_ELECTRONIC.value] if not_electronic else []
             warnings_by_id[item_id] = unique_in_order(
                 extraction.warnings, segmentation_failed.get(item_id, []), post_warnings,
-                rule_warnings,
+                rule_warnings, verdict_warnings,
             )  # fmt: skip
             if trace is not None:
                 trace.vlm_replies[item_id] = extraction.raw_replies
@@ -227,11 +286,21 @@ class ElectronicsClassificationPipeline:
 
         # [J] assemble, [K] render
         result = assemble_result_payload(
-            items, attributes_by_id, warnings_by_id, width, height, self.meta, self.output_format
-        )
-        masks = {i.detection.detection_id: i.mask for i in items if i.mask is not None}
+            kept_items, attributes_by_id, warnings_by_id, width, height, self.meta,
+            self.output_format,
+        )  # fmt: skip
+        masks = {i.detection.detection_id: i.mask for i in kept_items if i.mask is not None}
         annotated = render_annotated_image(image, result.items, masks, self.style)
-        return self._finish(annotated, result, trace)
+        return annotated, result
+
+    def release_detection_models(self) -> None:
+        """Drop the detector and segmenter so their (GPU) memory can be freed.
+
+        After this only ``classify()`` works; ``detect()`` and ``run()`` raise. Call it once all
+        photos have gone through ``detect()``.
+        """
+        self.detector = None
+        self.segmenter = None
 
     @staticmethod
     def _finish(annotated: np.ndarray, result: ClassificationResult, trace: PipelineTrace | None):

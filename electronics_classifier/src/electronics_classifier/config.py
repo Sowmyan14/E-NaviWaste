@@ -63,6 +63,8 @@ class VLMConfig(_Strict):
     client: ComponentSpec
     max_retries: int = Field(default=1, ge=0)
     system_prompt_file: str | None = None
+    # what to do with an item the VLM says is not an electronic device
+    on_not_electronic: Literal["drop", "warn"] = "drop"
 
 
 class PipelineConfig(_Strict):

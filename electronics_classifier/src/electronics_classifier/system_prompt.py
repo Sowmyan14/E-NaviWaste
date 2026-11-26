@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from pathlib import Path
 
-from .config import FALLBACK_CATEGORY, ConfigError
+from .config import FALLBACK_CATEGORY, ConfigError, builtin_config_dir
 
 CATEGORIES_PLACEHOLDER = "{categories}"
 EXAMPLE_PLACEHOLDER = "{example_category}"  # optional: replaced by the first category
@@ -41,9 +41,18 @@ def validate_template(template: str, source: str = "system prompt template") -> 
 
 
 def load_template(path: str | Path) -> str:
-    """Read and validate a template file (``ConfigError`` on any problem)."""
+    """Read and validate a template file (``ConfigError`` on any problem).
+
+    A relative path that does not exist from the current folder is also tried against the
+    project folder next to ``config/``, so the built-in prompts load from any working directory.
+    """
+    candidate = Path(path)
+    if not candidate.is_absolute() and not candidate.is_file():
+        bundled = builtin_config_dir().parent / candidate
+        if bundled.is_file():
+            candidate = bundled
     try:
-        text = Path(path).read_text(encoding="utf-8")
+        text = candidate.read_text(encoding="utf-8")
     except OSError as exc:
         raise ConfigError(f"cannot read system prompt template {path}: {exc.strerror}") from None
     return validate_template(text, f"system prompt template {path}")

@@ -24,8 +24,49 @@ def threshold(cfg):
 
 def test_default_config_loads_and_validates():
     cfg = load_config()
-    assert cfg["pipeline"]["detector"]["name"] == "grounding_dino"
-    assert threshold(cfg) == 0.15
+    pipe = cfg["pipeline"]
+    assert pipe["detector"]["name"] == "ram_grounding_dino"
+    assert threshold(cfg) == 0.25
+    assert pipe["segmenter"]["name"] == "hf_sam"
+    assert pipe["segmentation_gate"]["name"] == "always"
+    assert pipe["vlm"]["on_not_electronic"] == "drop"
+    assert pipe["vlm"]["system_prompt_file"].endswith("vlm_validate_prompt.txt")
+    assert [s["name"] for s in pipe["attribute_postprocess"]][-1] == "category_open"
+
+
+def test_baseline_preset_restores_the_previous_default_pipeline():
+    pipe = load_config(["baseline"])["pipeline"]
+    assert pipe["detector"] == {
+        "name": "grounding_dino",
+        "params": {
+            "model_id": "IDEA-Research/grounding-dino-tiny",
+            "raw_box_threshold": 0.15,
+            "raw_text_threshold": 0.15,
+            "max_prompt_tokens": 256,
+        },
+    }  # no ram_* parameter leaks into the swapped-in detector
+    assert pipe["segmenter"] == {"name": "none", "params": {}}
+    assert pipe["segmentation_gate"] == {"name": "overlap", "params": {"iou": 0.15}}
+    assert pipe["vlm"]["system_prompt_file"] is None
+    assert pipe["vlm"]["client"]["name"] == "openai_compatible"
+    assert pipe["vlm"]["client"]["params"]["model"] == "qwen3-vl:8b-instruct"
+    assert [s["name"] for s in pipe["attribute_postprocess"]] == [
+        "normalize_unknown", "ocr_verify_model", "category_vocab",
+    ]  # fmt: skip
+
+
+def test_the_default_vocabulary_has_no_appliance_fallback_but_baseline_keeps_the_old_one():
+    default = load_config()["vocabulary"]["categories"]
+    baseline = load_config(["baseline"])["vocabulary"]["categories"]
+    assert "appliance" not in default and "electronic device" in default  # generic fallback stays
+    assert "appliance" in baseline  # baseline still reproduces the old pipeline
+    assert [c for c in baseline if c != "appliance"] == default  # and differs by that one entry
+
+
+def test_baseline_leaves_the_shared_stages_untouched():
+    default, baseline = load_config()["pipeline"], load_config(["baseline"])["pipeline"]
+    for key in ("detection_filters", "image_preprocess", "crop", "warning_rules"):
+        assert baseline[key] == default[key]
 
 
 def test_layer_order_default_preset_override_set(tmp_path):
@@ -35,7 +76,7 @@ def test_layer_order_default_preset_override_set(tmp_path):
     override = write_yaml(
         tmp_path / "o.yaml", {"pipeline": {"detector": {"params": {"raw_box_threshold": 0.3}}}}
     )
-    assert threshold(load_config()) == 0.15
+    assert threshold(load_config()) == 0.25
     assert threshold(load_config(presets=[str(preset)])) == 0.2
     assert threshold(load_config(presets=[str(preset)], overrides=[override])) == 0.3
     layered = load_config(
@@ -77,8 +118,10 @@ def test_component_rename_replaces_params_but_same_name_merges(tmp_path):
     cfg = load_config(overrides=[renamed_with_params])
     assert cfg["pipeline"]["detector"] == {"name": "fake", "params": {"a": 1}}
 
-    same = write_yaml(tmp_path / "s.yaml", {"pipeline": {"detector": {"name": "grounding_dino"}}})
-    assert "model_id" in load_config(overrides=[same])["pipeline"]["detector"]["params"]
+    same = write_yaml(
+        tmp_path / "s.yaml", {"pipeline": {"detector": {"name": "ram_grounding_dino"}}}
+    )
+    assert "ram_checkpoint" in load_config(overrides=[same])["pipeline"]["detector"]["params"]
 
 
 def test_set_name_resets_params_and_set_accepts_flow_values():

@@ -13,11 +13,19 @@ thresholds, prompts, post-processing, warning logic) is a **named, config-select
 component**. Nothing is hardcoded.
 
 ```text
-photo -> preprocess -> detector -> sanitize -> filters -> ids
-      -> segmenter+gate -> crop builder -> crop transforms
-      -> VLM + extractor -> post-processors -> warning rules -> assembler -> JSON
-                                                              \-> renderer -> annotated image
+photo -> preprocess -> detector (RAM++ tags -> Grounding DINO boxes) -> sanitize -> filters -> ids
+      -> segmenter (SAM masks)+gate -> crop builder -> crop transforms
+      -> VLM (validates, then reads brand/model/color) + extractor -> post-processors
+      -> warning rules -> assembler -> JSON
+                                    \-> renderer -> annotated image
 ```
+
+The default detector is **Grounded-SAM + RAM++**: RAM++ (Recognize Anything) lists what is in the
+photo, Grounding DINO draws a box for each tag, and SAM turns each box into a mask. So the
+detector is no longer limited to a hand-written vocabulary, and the VLM sees a masked crop.
+The VLM is told what the detector proposed, says whether the item is really an electronic
+device (non-devices are dropped), and reads brand, model and color. The previous pipeline
+(Grounding DINO prompted with a fixed vocabulary, no masks) is kept as `--preset baseline`.
 
 ## Install
 
@@ -25,7 +33,8 @@ Python 3.10 to 3.12.
 
 ```bash
 pip install -e .            # core: numpy, opencv, Pillow, pydantic, pyyaml, supervision
-pip install -e '.[dino]'    # default detector (Grounding DINO): transformers, torch
+pip install -e '.[grounded]' # default detector + masks: RAM++ (`ram`, from git), Grounding DINO, SAM, torch, timm
+pip install -e '.[dino]'    # Grounding DINO alone (the `baseline` preset): transformers, torch
 pip install -e '.[vlm]'     # default VLM client: transformers, torch, torchvision, qwen-vl-utils
 pip install -e '.[server]'  # VLM through LM Studio / Ollama / any OpenAI-compatible server
 pip install -e '.[ocr]'     # RapidOCR: lets the model-name check read text in the crops
@@ -34,6 +43,35 @@ pip install -e '.[sam]'     # optional SAM masks (segment-anything)
 pip install -e '.[sam2]'    # optional SAM 2 masks (alternative to `sam`)
 pip install -e '.[dev]'     # pytest, ruff
 ```
+
+### RAM++ checkpoint and Apple Silicon
+
+The default detector needs the RAM++ weights, which are not downloaded automatically:
+
+```bash
+mkdir -p checkpoints
+curl -L -o checkpoints/ram_plus_swin_large_14m.pth \
+  https://huggingface.co/xinyu1205/recognize-anything-plus-model/resolve/main/ram_plus_swin_large_14m.pth
+```
+
+Until the file exists, building the default pipeline fails with a `ConfigError` naming
+`pipeline.detector.params.ram_checkpoint`; `--preset baseline` runs without it. Grounding DINO and
+SAM weights come from Hugging Face on first use.
+
+- `recognize-anything` installs from GitHub under the package name `ram`. It declares no
+  dependencies (its `requirements.txt` pins `timm==0.4.12`, which no longer installs), so the
+  `grounded` extra lists `timm` and `fairscale` unpinned. It was written for `transformers` 4.x:
+  `components/detectors/_ram_compat.py` restores the few names that `transformers` 5.x removed
+  (each shim only applies when the name is missing). It was checked on `transformers` 5.24,
+  `timm` 1.0.31 and torch 2.15; remove the module when `ram` supports 5.x.
+- On a Mac (device `mps`) unsupported ops fall back to the CPU (`mps_fallback`, on by default) and
+  SAM inputs are cast to float32, because Apple GPUs have no float64. If RAM++ still fails on the
+  GPU, set `pipeline.detector.params.ram_on_cpu=true`; it tags only one image per run.
+  `ram_half=true` runs RAM++ in float16 to save memory.
+- Measured on an M2 with 16 GB: building the pipeline takes about 14 s, then RAM++ + Grounding
+  DINO take about 1.3 s and SAM about 1.2 s per photo. With an 8B VLM resident in Ollama (5.7 GB)
+  next to other apps the machine swapped and the same stages slowed about 30 times, so unload
+  the VLM between runs or use `--preset fast` (2B VLM).
 
 Heavy packages are imported lazily, so `import electronics_classifier`, the CLI help and the
 whole unit-test suite work with **no GPU, no torch and no weights**. Weights are downloaded by
@@ -100,15 +138,15 @@ One YAML file describes the whole run: `config/pipeline.yaml`. Its sections mirr
 | Section | What it controls |
 |---|---|
 | `run` | `device` (`auto` picks cuda, then mps, then cpu) and `seed` |
-| `vocabulary.categories` | The one category list used by the detector, the VLM prompt, the post-processors and the rules. `electronic device` is always appended. Entries are lower-cased, stripped, de-duplicated; dots are removed because `.` separates Grounding DINO phrases |
+| `vocabulary.categories` | The category list used by the VLM prompt, the post-processors and the rules, and (with `include_vocabulary`) added to the RAM++ tags in the detector prompt. With `--preset baseline` it is the detector's whole prompt. `electronic device` is always appended. Entries are lower-cased, stripped, de-duplicated; dots are removed because `.` separates Grounding DINO phrases |
 | `pipeline.image_preprocess` | Ordered steps before detection: `ensure_rgb_uint8`, `resize_max_side`, `clahe`, `gamma` |
-| `pipeline.detector` | `grounding_dino` (default) or `fake`; returns raw detections above a low floor score |
+| `pipeline.detector` | `ram_grounding_dino` (default: RAM++ tags, then Grounding DINO boxes), `grounding_dino` (vocabulary prompt, the `baseline` preset) or `fake`; returns raw detections above a low floor score |
 | `pipeline.detection_filters` | Ordered: `score_threshold`, `min_size`, `min_area_ratio`, `nms`, `containment`, `top_k` |
-| `pipeline.segmenter` / `segmentation_gate` | `none` (default), `sam`, `sam2`; the gate (`always`, `overlap`) picks which items get a mask |
+| `pipeline.segmenter` / `segmentation_gate` | `hf_sam` (default, Hugging Face SAM), `none`, `sam`, `sam2`; the gate (`always` by default, or `overlap`) picks which items get a mask |
 | `pipeline.crop` | `padding_ratio`, `include_full_image_context`, `max_image_side_px` |
 | `pipeline.crop_transforms` | Ordered: `identity`, `upscale_min_side`, `sharpen`, `clahe` |
-| `pipeline.vlm` | `client` (`transformers`, `openai_compatible`, `fake`), `max_retries`, `system_prompt_file` (a template containing `{categories}`) |
-| `pipeline.attribute_postprocess` | Ordered: `normalize_unknown`, `ocr_verify_model`, `category_vocab`, `category_open`, `brand_aliases` |
+| `pipeline.vlm` | `client` (`transformers`, `openai_compatible`, `fake`), `max_retries`, `system_prompt_file` (a template containing `{categories}`), `on_not_electronic` (`drop` or `warn`) |
+| `pipeline.attribute_postprocess` | Ordered: `normalize_unknown`, `ocr_verify_model`, `category_open` (default), `category_vocab`, `brand_aliases` |
 | `pipeline.warning_rules` | Ordered: `unknown_field`, `low_detector_confidence`, `small_crop`, `overlap`, `category_mismatch`, `category_oov` |
 | `rendering` | `output_format`, `label_template`, `stroke_scale`, `font_scale`, `mask_alpha` |
 
@@ -148,6 +186,7 @@ component names) in `result.json`, so any output can be reproduced and compared.
 
 | Preset | What it does |
 |---|---|
+| `baseline` | The previous default pipeline: Grounding DINO prompted with `vocabulary.categories`, no masks, the vocabulary-locked VLM prompt, `category_vocab`, and the Ollama `qwen3-vl:8b-instruct` client. Use it as a comparison point or when RAM++ is not installed. Combine with others: `--preset baseline --preset fast` |
 | `fast` | Smaller VLM (`Qwen/Qwen2-VL-2B-Instruct`, 128 new tokens), `resize_max_side` 960, `top_k` 10, no SAM |
 | `accurate_sam` | SAM `vit_b` masks for overlapping items and `padding_ratio` 0.25. You must download the checkpoint to `checkpoints/sam_vit_b_01ec64.pth` (or override the path); building fails with a clear `ConfigError` until it exists |
 
@@ -187,7 +226,8 @@ pipeline:
 5. Compare against the baseline by comparing `result.json` files; each carries `meta.config_hash`.
 
 **Swapping the detection model** (e.g. Grounding DINO base) is a one-line config change:
-`pipeline.detector.params.model_id`. Switching the whole recipe is a preset (`--preset fast`).
+`pipeline.detector.params.model_id`. The SAM size is `pipeline.segmenter.params.model_id`
+(`facebook/sam-vit-base`, `-large` or `-huge`). Switching the whole recipe is a preset (`--preset fast`).
 
 Interfaces live in `src/electronics_classifier/interfaces.py`. A component is constructed as
 `Component(params, build_ctx)`; the build context carries the shared vocabulary, the resolved
@@ -232,6 +272,8 @@ device, the seed and the read-only resolved config.
 
 Warning codes: `BRAND_UNKNOWN`, `MODEL_UNKNOWN`, `COLOR_UNKNOWN`, `LOW_DETECTOR_CONFIDENCE`,
 `MODEL_UNVERIFIED` (the VLM named a model that OCR could not find in the crop),
+`NOT_ELECTRONIC` (the VLM said the item is not an electronic device and `on_not_electronic` is
+`warn`; with the default `drop` the item is removed instead),
 `CATEGORY_OUT_OF_VOCAB`, `CATEGORY_MISMATCH` (the detector's phrase and the VLM's category are two
 different specific categories), `VLM_PARSE_FAILED`, `SMALL_CROP`,
 `PARTIALLY_OCCLUDED_OR_OVERLAPPING` and `SEGMENTATION_FAILED` (an item the gate chose for a mask ended up without one, so its crop
@@ -257,7 +299,7 @@ pytest tests/slow -m slow -s      # Tier C: real models and real photos (optiona
 ruff check src tests
 ```
 
-- **Tier A** (`test_failure_modes.py`, A01 to A34): hostile input or output the system must
+- **Tier A** (`test_failure_modes.py`, A01 to A40): hostile input or output the system must
   survive. All pass.
 - **Tier B** (B01 to B08, same file): known design weaknesses (B02, B05 and B06 are fixed). Each asserts the *ideal*
   behaviour and is `xfail(strict=True)`; the reason names the suggested fix. When a weakness
@@ -290,15 +332,17 @@ These points were not fixed by the plan and were decided with the maintainer:
 - Only unparseable VLM output is retried (`max_retries`); a VLM exception goes straight to
   fallback attributes.
 - `SEGMENTATION_FAILED` is a built-in warning code beyond the original list.
-- `category_oov` is available as a rule but is not in the default config, because the
-  `category_vocab` post-processor already fixes categories. If you remove `category_vocab`,
-  add `category_oov` or out-of-vocabulary categories will pass through without a warning.
-- `category_open` is the open-vocabulary alternative to `category_vocab`: a category outside
-  the vocabulary is kept (cleaned, at most `max_words` words) and flagged `CATEGORY_NOVEL`.
-  Only empty, `unknown` or sentence-like categories fall back to `electronic device`. Use it via
-  `--preset open_vocab`, which also swaps in a prompt that lets the VLM name unlisted devices
-  (run from the `electronics_classifier/` folder: the prompt path is relative). The detector
-  still only proposes boxes for vocabulary phrases, so add a generic one to catch unlisted items.
+- `category_oov` is available as a rule but is not in the default config. It only matters for
+  a vocabulary-locked setup: with `category_vocab` (the `baseline` preset) categories are already
+  fixed; if you remove both `category_vocab` and `category_open`, add `category_oov` or
+  out-of-vocabulary categories will pass through without a warning.
+- `category_open` (the default) is the open-vocabulary alternative to `category_vocab`: a category
+  outside the vocabulary is kept (cleaned, at most `max_words` words) and flagged
+  `CATEGORY_NOVEL`. Only empty, `unknown` or sentence-like categories fall back to
+  `electronic device`. The default prompt (`config/prompts/vlm_validate_prompt.txt`) already lets
+  the VLM name unlisted devices. The `open_vocab` preset is the older way to get this on the
+  baseline detector (`--preset baseline --preset open_vocab`); do not add it to the default
+  pipeline, because its prompt has no `is_electronic` verdict and would switch validation off.
 - `brand_aliases` reads a YAML or JSON mapping file; aliases match case-insensitively and
   ignore hyphens, underscores and extra spaces.
 - Both `sam` and `sam2` are real segmenters behind one interface (`pip install -e '.[sam]'`
@@ -315,14 +359,36 @@ These points were not fixed by the plan and were decided with the maintainer:
   model, and the engine loads on first use, so a run with no claims never touches it. Without
   the `ocr` extra, claims are reported unverified with a one-time warning (set
   `if_unavailable: error` to fail at build time instead). Brands are not checked this way,
-  because a brand can be read from a logo, which is not text.
+  because a brand can come from a logo (not text), or from distinctive features and scene context.
+- The default detector is `ram_grounding_dino` and the default segmenter is `hf_sam`, which
+  follow the Grounded-SAM + RAM flow of IDEA-Research/Grounded-Segment-Anything. Masks stay in the
+  segmenter stage (not in the detector), so they are computed only for boxes that passed the
+  filters and are made from the original image.
+- RAM tags describe the whole scene (colours, rooms, furniture, verbs). `drop_tags` removes the
+  usual ones before they reach Grounding DINO, and the VLM `is_electronic` verdict removes the
+  rest, so a box on a table or a wall does not become an item. A reply with no verdict, or one that
+  cannot be read, never drops an item.
+- The VLM is shown the detector's phrase as a hint to check, not a fact. `category_mismatch`
+  treats phrases that share a word (`laptop computer`, `laptop`) as agreeing, because RAM phrases
+  are free text; two categories that share a word (`usb hub`, `usb charger`) are therefore not
+  flagged.
+- Holes inside a SAM mask are filled (`hf_sam` `fill_holes`, on by default). Otherwise SAM tends
+  to leave a label sticker or camera window out of the mask, and the crop blanks exactly the text
+  that the VLM and OCR need to read the model number.
+- `ram_grounding_dino` keeps phrases outside the vocabulary (it sets `open_vocabulary`), so the
+  always-on sanitize step skips its vocabulary check for it. The closed `grounding_dino` detector
+  still has phrases outside the vocabulary dropped.
+- If RAM++ fails on one image, the detector falls back to the vocabulary prompt for that image
+  instead of raising.
 - The repository's own license is **MIT**.
 
 ## Licensing
 
 - This repository: **MIT** (see `LICENSE`).
-- Default stack: Grounding DINO (Apache-2.0), `supervision` (MIT) and `transformers`
-  (Apache-2.0).
+- Default stack: RAM++ via `recognize-anything` (Apache-2.0), Grounding DINO (Apache-2.0), SAM
+  through `transformers` (Apache-2.0), `supervision` (MIT) and `transformers` (Apache-2.0). The
+  RAM++ and SAM **weights** have their own licenses, which were not checked here: verify them
+  before distributing anything.
 - **YOLO-World / Ultralytics is deliberately not included**: Ultralytics is AGPL-3.0 and would
   impose AGPL obligations on a combined work. Nothing here imports it.
 - The optional `heic` extra: `pillow-heif` (BSD-3-Clause). Its wheels bundle the `libheif`

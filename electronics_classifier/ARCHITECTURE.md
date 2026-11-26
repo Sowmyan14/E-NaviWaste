@@ -6,15 +6,23 @@ pipeline. For install, CLI flags and the full config reference, see `README.md`.
 
 ## 1. The idea in one paragraph
 
-The classifier is a **two-model cascade** with a thin layer of rules around it:
+The classifier is a **cascade of models** with a thin layer of rules around it (the default is
+**Grounded-SAM + RAM++**, after IDEA-Research/Grounded-Segment-Anything):
 
-1. A **detector** (Grounding DINO, zero-shot) finds *where* devices are: boxes plus a
-   vocabulary phrase such as `router`.
-2. A **vision-language model (VLM)** looks at a crop of each box and says *what* it is:
-   `brand`, `model`, `category`, `color`.
-3. Everything else is deterministic code: **filters** clean up the boxes, **post-processors**
+1. A **detector** finds *where* devices are. RAM++ (Recognize Anything) tags the photo, those
+   tags become the prompt for Grounding DINO (zero-shot), and DINO returns boxes with a phrase
+   such as `router` or `kettle`. The phrases come from the image, not from a fixed list.
+2. A **segmenter** (SAM) turns each surviving box into a mask, so the crop can hide neighbours.
+3. A **vision-language model (VLM)** looks at the masked crop of each box. It is told the
+   detector's phrase, **validates** it (is this really an electronic device? what is it called?),
+   and reads `brand`, `model`, `category`, `color`.
+4. Everything else is deterministic code: **filters** clean up the boxes, **post-processors**
    clean up the VLM's answer, **warning rules** flag doubtful results, and an **assembler** and
    **renderer** produce the final JSON and annotated image from the same records.
+
+The previous pipeline (Grounding DINO prompted with a fixed vocabulary, no masks, vocabulary-locked
+categories) is the `baseline` preset (`--preset baseline`). Where this document says "default" it
+means Grounded-SAM + RAM++; where it names `grounding_dino`, that is the baseline detector.
 
 The key design principle: **every stage a researcher might want to change is a named,
 config-selected component.** The pipeline class itself contains no model logic. It only wires
@@ -90,22 +98,35 @@ steps: `clahe`, `gamma`. These steps change **only what the detector sees**. Geo
 record their scale and offset in a `PreprocessState` so boxes can be mapped back.
 
 ### [B] Detect (`detector`, one component)
-Default: `grounding_dino` (`IDEA-Research/grounding-dino-tiny`). It is prompted with the
-shared **vocabulary** (the category list in `pipeline.yaml`), joined like
-`"router . modem . power strip ."`. If the vocabulary is too long for one prompt, it is split
-into chunks of at most `max_prompt_tokens` and the model runs once per chunk.
+Default: `ram_grounding_dino` (RAM++ then `IDEA-Research/grounding-dino-tiny`):
 
-Each returned label is mapped back to the longest vocabulary phrase it contains; unmappable
-labels are dropped. The result is a list of `RawDetection(phrase, confidence, bbox_xyxy)`.
+1. **Tag.** RAM++ looks at the photo (resized to 384 px) and returns tags such as
+   `"kettle | countertop | black"`.
+2. **Clean.** Tags are lower-cased, de-duplicated, and stripped of dots and commas (DINO's
+   separator). `drop_tags` removes scene words (colours, rooms, furniture, verbs) and tags longer
+   than four words are dropped. The first `max_tags` are kept.
+3. **Prompt.** The cleaned tags, then (`include_vocabulary`) the shared vocabulary categories,
+   are joined like `"kettle . laptop . router ."`. If the list is too long for one prompt it is
+   split into chunks of at most `max_prompt_tokens` and DINO runs once per chunk.
 
-The detector applies only a **low floor score (0.15)**. Real thresholding is done later by
+If RAM++ fails on an image, the prompt falls back to the vocabulary for that image. The detector
+sets `open_vocabulary = True`, because its phrases are not limited to the vocabulary.
+
+The baseline detector `grounding_dino` skips steps 1 and 2: its prompt is the vocabulary alone.
+
+Each returned label is mapped back to the longest prompt phrase it contains; unmappable labels
+are dropped. The result is a list of `RawDetection(phrase, confidence, bbox_xyxy)`.
+
+The detector applies only a **low floor score** (0.25 box, 0.2 text for `ram_grounding_dino`, the
+Grounded-SAM demo values; 0.15 for the baseline). Real thresholding is done later by
 filters, so you can tune thresholds without re-running the model.
 
 ### Map back and sanitize
 Boxes are mapped from the pre-processed frame to original pixels (`_map_back`, which undoes the
 geometric steps in reverse order). Then `sanitize_detections` runs always, and is not
 configurable: it clamps boxes to the image and drops non-finite values, out-of-range
-confidences, empty boxes and phrases outside the vocabulary.
+confidences, empty boxes and, for a closed-vocabulary detector, phrases outside the vocabulary.
+A detector that sets `open_vocabulary` (like `ram_grounding_dino`) skips that last check.
 
 ### [C] Filter (`detection_filters`, ordered list)
 Each filter takes a list of detections and returns a smaller list. **Order matters.** Defaults:
@@ -126,10 +147,13 @@ sort makes ids deterministic across runs.
 **Early exit:** if nothing survives, `run` returns the original image and an empty `items`
 list immediately.
 
-### [D] Segment (optional: `segmenter` + `segmentation_gate`)
-Default segmenter is `none`, so this stage does nothing and the gate is never consulted. With
-`sam` or `sam2`, the **gate** (`overlap` by default) decides which items get a mask, and the
-segmenter is prompted with those boxes. Masks exist to blank out a neighbouring device
+### [D] Segment (`segmenter` + `segmentation_gate`)
+Default segmenter is `hf_sam` (Segment Anything from Hugging Face `transformers`, no checkpoint
+file). The **gate** (`always` by default) decides which items get a mask, and the segmenter is
+prompted with those boxes, all in one model call. Holes enclosed by a mask are filled
+(`fill_holes`), so a label sticker is not blanked out of the crop. If that call fails each box is retried alone,
+so one bad box loses only its own mask. With `segmenter: none` (the baseline) this stage does
+nothing and the gate is never consulted; `sam` and `sam2` are the checkpoint-file alternatives. Masks exist to blank out a neighbouring device
 that overlaps the crop. If an approved item ends up with no usable mask, the item gets a
 `SEGMENTATION_FAILED` warning and a plain rectangular crop.
 
@@ -153,16 +177,23 @@ Applied to each crop before the VLM sees it. Default: `identity`. Others: `upsca
 ### [G] VLM extraction (`vlm_client` + `AttributeExtractor`)
 This runs **once per item, sequentially**. The extractor:
 
-1. Sends the system prompt (the allowed categories are filled in from the vocabulary), the
+1. Sends the system prompt (the preferred categories are filled in from the vocabulary), the
    user text, and the images: **crop first, context second**. The user text tells the VLM to
-   describe only Image 1.
-2. Expects a JSON object with `brand`, `model`, `category`, `color`. The parser tolerates
+   describe only Image 1 and names the detector's phrase as **a hint to check, not a fact**.
+2. Expects a JSON object with `brand`, `model`, `category`, `color` and, with the default prompt
+   (`config/prompts/vlm_validate_prompt.txt`), `is_electronic`. A missing or unreadable verdict is
+   "no verdict" and never drops an item. The parser tolerates
    prose and code fences around the JSON, ignores extra keys, and turns missing keys and
    `null` into `"unknown"`.
 3. If the reply is not parseable, it retries up to `max_retries` times with a reminder to
    return JSON only. A client **exception** (timeout, out of memory) is not retried.
 4. If everything fails, the item gets all-`unknown` attributes, category `electronic device`,
    and a `VLM_PARSE_FAILED` warning. One bad item never aborts the run.
+
+**Validation.** When the VLM answers `is_electronic: false`, `vlm.on_not_electronic` decides: `drop`
+(default) removes the item from the result and the picture and records its id in
+`trace.dropped_not_electronic`; `warn` keeps it with a `NOT_ELECTRONIC` warning. This is what
+removes RAM scene tags that DINO boxed anyway (a table, a wall, a poster of a phone).
 
 VLM clients: `openai_compatible` (default in `pipeline.yaml`: a local Ollama server running
 `qwen3-vl:8b-instruct`), `transformers` (in-process Hugging Face model) and `fake`. They all
@@ -178,18 +209,19 @@ Each step takes the attribute dict and returns `(new_dict, warnings)`. Defaults,
    is kept only if the text is really there. Otherwise it becomes `unknown` plus
    `MODEL_UNVERIFIED`. This is the guard against hallucinated model numbers. It only runs
    for items where a model was claimed.
-3. `category_vocab`: a category outside the vocabulary becomes `electronic device` plus
-   `CATEGORY_OUT_OF_VOCAB`.
+3. `category_open` (default): a category outside the vocabulary is kept, cleaned, and flagged
+   `CATEGORY_NOVEL`.
 
-Alternatives: `category_open` (keep novel categories, flag `CATEGORY_NOVEL`; used by the
-`open_vocab` preset) and `brand_aliases` (canonicalise brand spellings from a mapping file).
+Alternatives: `category_vocab` (the baseline: a category outside the vocabulary becomes
+`electronic device` plus `CATEGORY_OUT_OF_VOCAB`) and `brand_aliases` (canonicalise brand
+spellings from a mapping file).
 
 ### [I] Warning rules (`warning_rules`, ordered list)
 Each rule inspects a draft of the finished item and returns warning codes. Defaults:
 `unknown_field` (`BRAND/MODEL/COLOR_UNKNOWN`), `low_detector_confidence` (below 0.40),
 `small_crop` (shorter side under 64 px), `overlap` (IoU of 0.15 or more with another box) and
 `category_mismatch` (the detector phrase and the VLM category are two different *specific*
-categories). Rules never change attributes; they only add warnings.
+categories that share no word). Rules never change attributes; they only add warnings.
 
 An item's final warnings are the union, de-duplicated in first-seen order, of: extractor
 warnings, segmentation warnings, post-processor warnings and rule warnings.
@@ -208,6 +240,20 @@ any output can be traced to the config that made it.
 ### Return value
 `run()` returns `(annotated_rgb, ClassificationResult)`, or with `return_trace=True`,
 `(annotated_rgb, result, PipelineTrace)`.
+
+### Two halves: `detect()` and `classify()`
+`run()` is `classify(detect(image))`. The two halves can be called separately:
+
+- `detect(image, trace=None) -> DetectedImage` runs stages [A]-[F] (RAM++, DINO, filters, SAM,
+  crops). It needs the detector and segmenter, never the VLM.
+- `classify(detected, trace=None) -> (annotated, result)` runs [G]-[K] (VLM, post-processing,
+  warnings, assembly, drawing). It never touches the detector or segmenter.
+- `release_detection_models()` drops the detector and segmenter. After it only `classify()` works.
+
+Use this to process a batch in two passes (detect every photo, release the models, then run the
+VLM on all of them). On a 16 GB machine this keeps the detection models and an 8B VLM from
+needing memory at the same time. A `DetectedImage` holds crops and masks, not model state, and
+gives the same result as `run()` (`tests/test_two_phase.py`).
 
 ## 5. Data flow: what each stage hands to the next
 
@@ -256,9 +302,10 @@ never in the middle of a run. Heavy imports (torch, transformers, SAM, RapidOCR)
 unit tests run with no GPU and no weights.
 
 ### The shared vocabulary
-`vocabulary.categories` is the single source of truth. It feeds the detector prompt, the VLM
-system prompt, `category_vocab`, `category_open` and the `category_*` rules. Change it in one
-place and all of them follow. `electronic device` is always appended as the fallback category.
+`vocabulary.categories` is the single source of truth for what the project knows by name. It feeds
+the detector prompt (added to the RAM tags with `include_vocabulary`, or the whole prompt in the
+baseline), the VLM system prompt, `category_vocab`, `category_open` and the `category_*` rules.
+Change it in one place and all of them follow. `electronic device` is always appended as the fallback category.
 
 ### Configuration layering
 Later layers win: `config/pipeline.yaml`, then each `--preset`, then each `--override FILE`,
@@ -283,14 +330,16 @@ Find your goal below, then touch only what is listed.
 
 | I want to... | Change |
 |---|---|
-| Find more or fewer devices | `vocabulary.categories`, the thresholds in `detection_filters`, `detector.params.model_id` |
+| Find more or fewer devices | `detector.params.max_tags` and `drop_tags`, `vocabulary.categories`, the thresholds in `detection_filters`, `detector.params.model_id` |
+| Compare with the old pipeline | `--preset baseline` (Grounding DINO + vocabulary prompt, no masks) |
+| Stop scene objects (table, wall) becoming items | `drop_tags`, and `vlm.on_not_electronic: drop` |
 | Stop parts (lens, label) showing up as devices | `containment` filter (see its `containers` param) |
 | Help the detector with small objects in big photos | Raise or remove `resize_max_side` in `image_preprocess` |
 | Help the VLM read labels | `crop.padding_ratio`, `crop.max_image_side_px`, add `upscale_min_side` or `sharpen` to `crop_transforms` |
-| Isolate overlapping devices | Use the `accurate_sam` preset (needs a SAM checkpoint) |
+| Isolate overlapping devices | The default `hf_sam` segmenter already masks every item; the `accurate_sam` preset uses a SAM checkpoint file instead |
 | Try a different VLM | `pipeline.vlm.client` (name and params) |
 | Change what the VLM is told | `pipeline.vlm.system_prompt_file` (must contain `{categories}`); see `config/prompts/` |
-| Allow categories beyond the vocabulary | `--preset open_vocab` (swaps `category_vocab` for `category_open` and the prompt) |
+| Restrict categories to the vocabulary | `--preset baseline`, or swap `category_open` for `category_vocab` |
 | Add a new check on results | Write a `warning_rule` |
 | Clean or correct VLM output | Write an `attribute_postprocess` step |
 | Run a different recipe | Add a preset under `config/presets/` |
@@ -331,19 +380,29 @@ Find your goal below, then touch only what is listed.
   that is the first place to look if VLM latency matters.
 - **The VLM is not trusted for model numbers.** It is told to answer `unknown` unless the
   exact name is printed, and `ocr_verify_model` then checks the claim against OCR. Brands are
-  not OCR-checked because they can come from logos.
+  not OCR-checked, and the default prompt asks the VLM to infer a brand from distinctive
+  features and scene context as well as logos, using `unknown` only when there is no evidence.
+  A brand is therefore more often a best guess than a model is.
 - **Tests mirror the structure.** `tests/test_failure_modes.py` holds hostile-input cases
   (Tier A) and known weaknesses as strict `xfail` tests (Tier B); `tests/slow/` needs real
   models. Run `pytest -q` after any change; it needs no GPU.
 
 ## 10. Known limitations
 
-- Out-of-vocabulary devices are not *detected*, even with `open_vocab`: that preset only lets
-  the VLM name an item the detector already boxed. Add a generic phrase to the vocabulary to
-  catch unlisted devices.
+- Detection is only as good as the RAM++ tag list (about 4,500 tags). A device RAM++ does not
+  tag is still found if its category is in the vocabulary (`include_vocabulary`), otherwise it is
+  missed.
+- RAM tags are noisy. The stoplist and the VLM verdict catch most scene objects, but an unusual
+  one can reach the VLM, which costs a model call.
+- `category_mismatch` treats phrases that share a word as agreeing (`usb hub` vs `usb charger`).
+- `recognize-anything` (`ram`) targets `transformers` 4.x. `detectors/_ram_compat.py` patches the
+  removed names so it runs on 5.x; a future `transformers` release could break it again.
+- RAM++ and SAM run on Apple GPUs (`mps`) with CPU fallback for unsupported ops; `ram_on_cpu` is
+  the escape hatch. With an 8B VLM resident at the same time, a 16 GB Mac swaps and slows down.
 - `containment` can drop a real device lying fully inside another's box (a charger on a power
   strip's box).
 - Very small objects in very large photos can be missed after `resize_max_side` shrinks the
   detector input.
-- The SAM segmenters and the `transformers` VLM client are tested in this repository only
-  against stub models, not real weights.
+- The RAM++ detector, the SAM segmenters and the `transformers` VLM client are tested in this
+  repository only against stub models, not real weights (`tests/slow/` C15-C17 cover the default
+  pipeline when the weights and photos are present).

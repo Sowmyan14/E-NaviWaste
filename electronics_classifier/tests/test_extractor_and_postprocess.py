@@ -104,15 +104,16 @@ def test_shipped_template_file_matches_the_builtin_template():
 # --- extractor: what is sent ---------------------------------------------------------
 
 
-def test_sends_crop_then_context_with_fixed_user_text_and_never_the_detector_phrase():
+def test_sends_crop_then_context_and_the_detector_phrase_only_as_a_hint_in_the_user_text():
     item = make_prepared_item(phrase="zzzdetectorphrase")
     ex, client = extractor([VALID])
     result = ex.extract(item)
     system_prompt, images, user_text = client.calls[0]
     assert images[0] is item.crop_rgb and images[1] is item.context_rgb
-    assert user_text == USER_TEXT
+    assert user_text.startswith(USER_TEXT)
+    assert "'zzzdetectorphrase'" in user_text and "hint" in user_text
     assert system_prompt == ex.system_prompt
-    assert "zzzdetectorphrase" not in system_prompt + user_text
+    assert "zzzdetectorphrase" not in system_prompt  # the shared prompt never names an item
     assert result.attributes == {
         "brand": "TP-Link", "model": "Archer", "category": "router", "color": "black",
     }  # fmt: skip
@@ -873,8 +874,10 @@ def test_ocr_verification_is_on_by_default_and_only_loads_when_a_model_is_claime
 
     from electronics_classifier.config import load_config
 
-    names = [step["name"] for step in load_config()["pipeline"]["attribute_postprocess"]]
-    assert names == ["normalize_unknown", "ocr_verify_model", "category_vocab"]
+    for preset, last in ((["baseline"], "category_vocab"), ([], "category_open")):
+        chain = load_config(preset)["pipeline"]["attribute_postprocess"]
+        assert [step["name"] for step in chain][:2] == ["normalize_unknown", "ocr_verify_model"]
+        assert chain[-1]["name"] == last
 
     def must_not_load(self, *args, **kwargs):
         raise AssertionError("the OCR engine was loaded although no model was claimed")
