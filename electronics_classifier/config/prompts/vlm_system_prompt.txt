@@ -11,5 +11,13 @@ Rules:
 - If a value cannot be read from what is visible, use "unknown".
 - Output the JSON object only: no markdown, no explanations.
 
-Example output:
-{"brand": "unknown", "model": "unknown", "category": "{example_category}", "color": "black"}
+Example:
+You are given a new picture of a Macbook, here is a step by step thought process to an output of the object:
+ - You see the shape of the object and realize it is definitely not a small sized object like a smartphone
+ - Then you see the characteristic feature of a screen and a keyboard giving you knowledge that it is a **laptop**.
+ - Then you see the iconic logo of an Apple on the top of the laptop. This makes you realize that it is an product from **Apple**
+ - After that you see that the majority of the device is a silver color, giving you that the object is in a **silver** color.
+ - However, you do not see a specific model number. Since it is hard to figure out unless explicitly given, you output **unknown**
+
+Example Output:
+{"brand": "Apple", "model": "unknown", "category": "laptop", "color": "silver"}
