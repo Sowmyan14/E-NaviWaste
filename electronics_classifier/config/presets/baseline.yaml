@@ -2,6 +2,27 @@
 # the vocabulary-locked VLM prompt, and the local Ollama Qwen3-VL client.
 # Kept as a comparison point for the Grounded-SAM + RAM++ default.
 # Usage: --preset baseline   (old fast recipe: --preset baseline --preset fast)
+# The old vocabulary, including the generic `appliance` entry that the default has dropped.
+vocabulary:
+  categories:
+    - router
+    - modem
+    - power strip
+    - charger
+    - smart speaker
+    - laptop
+    - tablet
+    - smartphone
+    - remote control
+    - game console
+    - monitor
+    - television
+    - webcam
+    - usb hub
+    - cable
+    - appliance
+    - electronic device
+
 pipeline:
   detector:
     name: grounding_dino

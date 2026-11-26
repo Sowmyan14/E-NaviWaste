@@ -225,3 +225,14 @@ def test_the_detector_is_registered_and_listed_with_its_parameters():
     assert by_name["ram_checkpoint"][0] == "required"
     assert all(text for _default, text in by_name.values())  # every parameter is described
     assert np.isclose(float(by_name["raw_box_threshold"][0]), 0.25)
+
+
+def test_the_default_detector_prompt_has_no_appliance_phrase():
+    from electronics_classifier.config import load_config
+
+    categories = load_config()["vocabulary"]["categories"]
+    detector = StubRam("kettle", categories=categories)
+    detector.predict(IMAGE)
+    phrases = [p for prompt in detector.prompts for p in prompt.removesuffix(" .").split(" . ")]
+    assert "appliance" not in phrases and "electronic device" in phrases
+    assert "kettle" in phrases  # RAM tags are still prompted first

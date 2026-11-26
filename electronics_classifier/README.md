@@ -359,7 +359,7 @@ These points were not fixed by the plan and were decided with the maintainer:
   model, and the engine loads on first use, so a run with no claims never touches it. Without
   the `ocr` extra, claims are reported unverified with a one-time warning (set
   `if_unavailable: error` to fail at build time instead). Brands are not checked this way,
-  because a brand can be read from a logo, which is not text.
+  because a brand can come from a logo (not text), or from distinctive features and scene context.
 - The default detector is `ram_grounding_dino` and the default segmenter is `hf_sam`, which
   follow the Grounded-SAM + RAM flow of IDEA-Research/Grounded-Segment-Anything. Masks stay in the
   segmenter stage (not in the detector), so they are computed only for boxes that passed the

@@ -151,7 +151,7 @@ class MinAreaRatio(_Filter):
 class FullFrameGuard(_Filter):
     """Handle boxes that cover (almost) the whole image.
 
-    A generic phrase ("electronic device", "appliance") can match the entire photo. Such a box
+    A generic phrase ("electronic device") can match the entire photo. Such a box
     localizes nothing, and in a later ``containment`` step it would swallow every real box
     inside it. So: if other, smaller boxes exist, the full-frame boxes are dropped; if every
     box is full-frame, only the most confident one is kept (it becomes a whole-image item).

@@ -19,7 +19,6 @@ vocabulary:
     - webcam
     - usb hub
     - cable
-    - appliance
     - electronic device
 
 pipeline:
