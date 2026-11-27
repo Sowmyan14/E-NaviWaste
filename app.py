@@ -231,15 +231,10 @@ if result and image is not None:
         if result["dropoff_error"]:
             st.error(result["dropoff_error"])
         elif not dropoffs:
-            st.info(f"No EPA-listed e-waste recyclers were found {area}.")
+            st.info(f"No NYC electronics drop-off sites were found {area}.")
         else:
             noun = "recycler" if len(dropoffs) == 1 else "recyclers"
             st.write(f"{len(dropoffs)} e-waste {noun} {area}, nearest first:")
-            if not all(d["dropoff_verified"] for d in dropoffs):
-                st.warning(
-                    "Public drop-off is not confirmed for every site, and some may only serve "
-                    "businesses. Contact a site before visiting."
-                )
         for d in dropoffs:
             with st.container(border=True):
                 st.markdown(f"**{d['name']}**")
