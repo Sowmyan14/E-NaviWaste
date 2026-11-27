@@ -111,7 +111,7 @@ def run_pipeline(device: str, zip_code: str) -> dict:
         "dropoff_error": dropoff_error,
     }
 
-st.title("NavE=Waste")
+st.title("NavE-Waste")
 st.caption("Upload an image of your old device to get safe wipe steps and nearby drop-off sites")
 
 with st.sidebar:
@@ -243,5 +243,7 @@ if result and image is not None:
                 if contact:
                     st.markdown(" · ".join(contact))
         if dropoffs:
-            st.caption("Source: US EPA. Distances are straight-line miles from the center of "
+            st.caption("Waste facility location data sourced through Esri ArcGIS REST Services. " \
+                       "Original data publishers are credited where available. " \
+                       "Distances are straight-line miles from the center of "
                        "the ZIP code. Verify hours before visiting.")
