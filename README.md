@@ -1,6 +1,11 @@
 # E-NaviWaste
 
-**Data Source:** Esri ArcGIS REST Services Directory  
-https://services.arcgis.com/cJ9YHowT8TU7DUyn/ArcGIS/rest/services
+### Data Sources
 
-Data accessed November 24, 2026.
+**NYC Electronics Drop-Off Locations**
+- Provider: New York City Department of Sanitation (DSNY)
+- Platform: NYC Open Data
+- Dataset: Electronics Drop Off Locations in NYC
+- Source: https://data.cityofnewyork.us/Environment/Electronics-Drop-Off-Locations-in-NYC-Map-/9wzr-uhik
+
+Data is used to identify electronic waste drop-off locations in New York City.
