@@ -6,53 +6,31 @@ from urllib.parse import urlparse
 
 import requests
 
-# EPA electronics recycler API
-API_URL = (
-    "https://services.arcgis.com/cJ9YHowT8TU7DUyn/"
-    "ArcGIS/rest/services/High-volume_Recycling_Infrastructure/"
-    "FeatureServer/0/query"
-)
+# NYC Open Data: "Electronics Drop Off Locations in NYC", published by the Department of
+# Sanitation (DSNY). Every site on it takes electronics from NYC residents.
+API_URL = "https://data.cityofnewyork.us/api/v3/views/wshr-5vic/query.json"
 
 DATA_FOLDER = Path(__file__).resolve().parent / "data"
-CSV_FILE = DATA_FOLDER / "epa_facilities.csv"
-
-FIELDS = [
-    "Name",
-    "Address",
-    "County",
-    "TELEPHONE",
-    "Email",
-    "Website",
-    "Infra_Type",
-    "Feedstock",
-    "Street",
-    "City",
-    "State",
-    "Zip_Code"
-]
+CSV_FILE = DATA_FOLDER / "nyc_dropoffs.csv"
 
 
-def api_request(params):
-    """Send a request to the EPA API."""
+def api_request():
+    """Return every row of the NYC drop-off dataset."""
 
-    response = requests.get(
-        API_URL,
-        params=params,
-        timeout=45
-    )
+    response = requests.get(API_URL, timeout=45)
 
     response.raise_for_status()
 
     result = response.json()
 
-    if "error" in result:
-        raise RuntimeError(result["error"])
+    if not isinstance(result, list):  # errors come back as an object
+        raise RuntimeError(result.get("message") or result)
 
     return result
 
 
 # --- duplicates ---------------------------------------------------------------------------
-# The EPA lists some sites twice, often under two names. Two rows are the same site only when
+# A dataset can list a site twice, often under two names. Two rows are the same site only when
 # the location, the street number and the company all match: different companies can share a
 # building, and one company can have several buildings on a street.
 
@@ -174,62 +152,78 @@ def remove_duplicates(facilities):
     return kept
 
 
+CONTACT_FIELDS = ("phone", "email", "website", "contact_source")
+
+
+def previous_contacts():
+    """Return {(name, address): contact fields} from the CSV already on disk."""
+
+    if not CSV_FILE.exists():
+        return {}
+
+    with open(CSV_FILE, newline="", encoding="utf-8") as file:
+        return {
+            (row["name"], row["address"]): {
+                field: row.get(field, "") for field in CONTACT_FIELDS
+            }
+            for row in csv.DictReader(file)
+        }
+
+
 def download_facilities():
-    """Download EPA electronics recycler records."""
+    """Download the NYC electronics drop-off sites."""
 
-    print("Connecting to EPA API...")
+    print("Connecting to NYC Open Data...")
 
-    data = api_request({
-        "where": "1=1",
-        "outFields": "*",
-        "returnGeometry": "true",
-        "outSR": 4326,
-        "resultRecordCount": 1000,
-        "f": "json"
-    })
+    rows = api_request()
 
-    features = data.get("features", [])
-
-    print("Records retrieved:", len(features))
+    print("Records retrieved:", len(rows))
 
     facilities = []
 
-    for feature in features:
+    for row in rows:
 
-        attributes = feature.get("attributes") or {}
-        geometry = feature.get("geometry") or {}
-
-        latitude = geometry.get("y")
-        longitude = geometry.get("x")
-
-        if latitude is None or longitude is None:
+        try:
+            latitude = float(row["latitude"])
+            longitude = float(row["longitude"])
+        except (KeyError, TypeError, ValueError):
             continue
 
+        street = text(row.get("address"))
+        borough = text(row.get("borough"))
+        zipcode = text(row.get("zipcode"))
+
         facilities.append({
-            "facility_id": attributes.get("OBJECTID"),
-            "name": attributes.get("Name"),
-            "address": (
-                attributes.get("Address")
-                or attributes.get("Street")
+            "facility_id": row.get("objectid"),
+            "name": text(row.get("dropoff_sitename")),
+            "address": ", ".join(
+                part for part in (street, borough, f"NY {zipcode}".strip()) if part
             ),
-            "city": attributes.get("City"),
-            "state": attributes.get("State"),
-            "zipcode": attributes.get("Zip_Code"),
-            "phone": attributes.get("TELEPHONE"),
-            "email": attributes.get("Email"),
-            "website": attributes.get("Website"),
-            "facility_type": attributes.get("Infra_Type"),
-            "feedstock": attributes.get("Feedstock"),
+            "city": borough,
+            "state": "NY",
+            "zipcode": zipcode,
+            "phone": "",  # the dataset has none: verify_dropoff.py --contacts fills them
+            "email": "",
+            "website": "",
+            "contact_source": "",
+            "facility_type": "Electronics Drop-Off",
+            "feedstock": "Electronics",
             "latitude": latitude,
             "longitude": longitude,
-            "source": "US EPA",
-            "dropoff_verified": False
+            "source": "NYC DSNY",
+            "dropoff_verified": True  # DSNY lists them as open to residents
         })
 
     total = len(facilities)
     facilities = remove_duplicates(facilities)
 
     print("Duplicates removed:", total - len(facilities))
+
+    # Keep contact details found earlier, so that a new download never erases them.
+    earlier = previous_contacts()
+
+    for facility in facilities:
+        facility.update(earlier.get((facility["name"], facility["address"]), {}))
 
     DATA_FOLDER.mkdir(parents=True, exist_ok=True)
 

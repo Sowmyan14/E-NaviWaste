@@ -11,6 +11,7 @@ import argparse
 import csv
 import ipaddress
 import json
+import math
 import random
 import re
 import socket
@@ -26,12 +27,12 @@ from urllib.robotparser import RobotFileParser
 import requests
 
 if __package__:
-    from .ewaste_locator import DATA_FOLDER
-    from .find_recyclers import domain, load_facilities
+    from .ewaste_locator import CSV_FILE, DATA_FOLDER, download_facilities
+    from .find_recyclers import clean_url, domain, load_facilities
 else:
-    from find_recyclers import domain, load_facilities
+    from find_recyclers import clean_url, domain, load_facilities
 
-    from ewaste_locator import DATA_FOLDER
+    from ewaste_locator import CSV_FILE, DATA_FOLDER, download_facilities
 
 RESULTS_FILE = DATA_FOLDER / "dropoff_verification.csv"
 CACHE_FOLDER = DATA_FOLDER / "page_cache"
@@ -368,9 +369,17 @@ def choose_links(home, links):
     return sorted(ranked, key=ranked.get)  # stable, so page order breaks ties
 
 
-def get_site(url):
-    """Return the crawled site, from the cache when it is recent."""
-    path = CACHE_FOLDER / f"{re.sub(r'[^a-z0-9.-]', '_', domain(url))}.json"
+def get_site(url, whole_url=False):
+    """Return the crawled site, from the cache when it is recent.
+
+    The cache is kept per domain, or per page address with ``whole_url``, for chains whose
+    store pages share one domain.
+    """
+    name = domain(url)
+    if whole_url:
+        parts = urlsplit(url)
+        name = f"{name}{parts.path}{'?' + parts.query if parts.query else ''}".rstrip("/")
+    path = CACHE_FOLDER / f"{re.sub(r'[^a-z0-9.-]', '_', name.lower())[:150]}.json"
     oldest = str(date.today() - timedelta(days=RECHECK_DAYS))
     if path.exists():
         site = json.loads(path.read_text(encoding="utf-8"))
@@ -572,6 +581,186 @@ def is_done(row, redo=False):
     return row["reason"] not in RETRY_REASONS and row["checked_on"] >= oldest
 
 
+# --- contact details -----------------------------------------------------------------------
+# The NYC list has no phone, email or website. OpenStreetMap often has them for the shop at that
+# spot; the shop's website can then fill what is still missing.
+
+OVERPASS_URL = "https://maps.mail.ru/osm/tools/overpass/api/interpreter"
+OSM_CACHE = DATA_FOLDER / "osm_cache.json"
+OSM_RADIUS_M = 120  # search this far around the listed point
+OSM_MAX_DISTANCE_M = 150  # a matching place further away is someone else
+PHONE = re.compile(r"(?<!\d)(?:\+?1[-.\s]?)?\(?([2-9]\d{2})\)?[-.\s]?(\d{3})[-.\s]?(\d{4})(?!\d)")
+EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)*\.[a-z]{2,}", re.IGNORECASE)
+TOLL_FREE = {"800", "833", "844", "855", "866", "877", "888"}  # head offices, not one store
+NAME_FILLER = {"the", "of", "and", "inc", "llc", "ltd", "co", "corp", "store", "site", "nyc", "ny"}
+
+
+def format_phone(text):
+    """Return "(718) 265-6950", or "" when the text is not a US phone number."""
+    match = PHONE.search(text or "")
+    return f"({match[1]}) {match[2]}-{match[3]}" if match else ""
+
+
+def name_words(text):
+    return set(re.findall(r"[a-z0-9]+", (text or "").lower())) - NAME_FILLER
+
+
+def metres(lat1, lon1, lat2, lon2):
+    """Distance in metres; flat-earth is accurate enough within a city."""
+    dy = (lat1 - lat2) * 111_320
+    dx = (lon1 - lon2) * 111_320 * math.cos(math.radians(lat1))
+    return math.hypot(dx, dy)
+
+
+def osm_places(facility, cache):
+    """Return the named OpenStreetMap places around the facility, from the cache if possible."""
+    key = f"{facility['latitude']},{facility['longitude']}"
+    if key not in cache:
+        query = (
+            f"[out:json][timeout:25];nwr(around:{OSM_RADIUS_M},{key})[name];out center tags;"
+        )
+        response = requests.post(
+            OVERPASS_URL, data={"data": query}, headers={"User-Agent": USER_AGENT}, timeout=60
+        )
+        response.raise_for_status()
+        cache[key] = response.json()["elements"]
+        OSM_CACHE.write_text(json.dumps(cache), encoding="utf-8")
+        time.sleep(DELAY_SECONDS)
+    return cache[key]
+
+
+def osm_match(facility, places):
+    """Return the tags of the nearest place whose name or brand shares a word with ours."""
+    wanted = name_words(facility["name"])
+    best = None
+    for place in places:
+        tags = place.get("tags", {})
+        point = place.get("center", place)
+        if "lat" not in point:
+            continue
+        if not wanted & name_words(f"{tags.get('name', '')} {tags.get('brand', '')}"):
+            continue
+        distance = metres(
+            float(facility["latitude"]), float(facility["longitude"]), point["lat"], point["lon"]
+        )
+        if distance <= OSM_MAX_DISTANCE_M and (best is None or distance < best[0]):
+            best = (distance, tags)
+    return best[1] if best else None
+
+
+def contacts_from_osm(tags):
+    first = lambda *keys: next((tags[key] for key in keys if tags.get(key)), "")  # noqa: E731
+    email = first("email", "contact:email")
+    return {
+        "phone": format_phone(first("phone", "contact:phone")),
+        "email": email if EMAIL.fullmatch(email) else "",
+        "website": clean_url(first("website", "contact:website", "url")),
+    }
+
+
+def contacts_from_site(facility, site, shared):
+    """Return the phone and email a website gives for this facility.
+
+    A website shared by several facilities (a chain) only counts when it gives this
+    facility's street address, so that a head-office number is never copied to every store.
+    """
+    pages = site["pages"]
+    if shared:
+        pages = pages[:1]  # the store page itself, not the other stores it links to
+        if not pages or not mentions_address(facility, pages):
+            return {}
+    if not pages:
+        return {}
+    text = " | ".join(block for page in pages for block in page["blocks"])
+    phones = Counter(
+        f"({a}) {b}-{c}" for a, b, c in PHONE.findall(text) if a not in TOLL_FREE
+    )
+    emails = Counter(
+        email.lower() for email in EMAIL.findall(text)
+        if not re.search(r"\.(png|jpe?g|gif|svg|webp)$|example\.|sentry|wixpress", email, re.I)
+    )  # fmt: skip
+    return {
+        "phone": phones.most_common(1)[0][0] if phones else "",
+        "email": emails.most_common(1)[0][0] if emails else "",
+    }
+
+
+def fill_contacts(redo=False):
+    """Fill the empty phone, email and website cells of the NYC drop-off CSV."""
+    if not CSV_FILE.exists():
+        download_facilities()
+    with open(CSV_FILE, newline="", encoding="utf-8") as file:
+        reader = csv.DictReader(file)
+        fields = list(reader.fieldnames)
+        rows = list(reader)
+    if "contact_source" not in fields:
+        fields.append("contact_source")
+    cache = json.loads(OSM_CACHE.read_text(encoding="utf-8")) if OSM_CACHE.exists() else {}
+
+    def save():
+        temporary = CSV_FILE.with_suffix(".tmp")
+        with open(temporary, "w", newline="", encoding="utf-8") as file:
+            writer = csv.DictWriter(file, fields)
+            writer.writeheader()
+            writer.writerows(rows)
+        temporary.replace(CSV_FILE)
+
+    # Step 1: OpenStreetMap.
+    for number, row in enumerate(rows, 1):
+        row.setdefault("contact_source", "")
+        if row["contact_source"] and not redo:
+            continue
+        try:
+            tags = osm_match(row, osm_places(row, cache))
+        except (requests.RequestException, ValueError, KeyError) as exc:
+            print(f"{number}/{len(rows)} {row['name'][:40]}: map lookup failed ({exc})")
+            continue
+        found = contacts_from_osm(tags) if tags else {}
+        sources = set()
+        for field, value in found.items():
+            if value and not row[field]:  # never overwrite a value that is already there
+                row[field] = value
+                sources.add("osm")
+        row["contact_source"] = "osm" if sources else "not_found"
+        save()
+        print(f"{number}/{len(rows)} {row['name'][:40]}: "
+              f"{'map: ' + ', '.join(k for k, v in found.items() if v) if sources else 'not on map'}")  # fmt: skip
+
+    # Step 2: the websites, for what the map did not give.
+    sites_on_domain = Counter(domain(clean_url(row["website"])) for row in rows if row["website"])
+    todo = [row for row in rows if row["website"] and not (row["phone"] and row["email"])]
+    print(f"\nReading {len(todo)} websites for missing phone numbers and emails...")
+    by_domain = defaultdict(list)
+    for row in todo:
+        by_domain[domain(clean_url(row["website"]))].append(row)
+
+    def read_domain(group):
+        """Read one domain's pages one after another, so that no site gets parallel requests."""
+        return {id(row): get_site(clean_url(row["website"]), whole_url=True) for row in group}
+
+    with ThreadPoolExecutor(max_workers=6) as pool:  # each worker reads a different domain
+        sites = {}
+        for result in pool.map(read_domain, by_domain.values()):
+            sites.update(result)
+        for row in todo:
+            shared = sites_on_domain[domain(clean_url(row["website"]))] > 1
+            found = contacts_from_site(row, sites[id(row)], shared)
+            added = [field for field, value in found.items() if value and not row[field]]
+            for field in added:
+                row[field] = found[field]
+            if added:
+                row["contact_source"] = "+".join(
+                    part for part in (row["contact_source"].replace("not_found", ""), "website")
+                    if part
+                )
+                print(f"  {row['name'][:40]}: website gave {', '.join(added)}")
+    save()
+
+    filled = {field: sum(bool(row[field]) for row in rows) for field in ("phone", "email", "website")}
+    print(f"\nFilled, of {len(rows)} sites:", filled)
+    print("Saved to:", CSV_FILE)
+
+
 # --- command line --------------------------------------------------------------------------
 
 
@@ -644,7 +833,17 @@ def main():
     parser.add_argument("--seed", type=int, default=1, help="choose a different sample")
     parser.add_argument("--score", action="store_true", help="compare with human_status")
     parser.add_argument("--redo", action="store_true", help="judge finished rows again")
+    parser.add_argument(
+        "--contacts", action="store_true", help="fill phone, email and website in the NYC CSV"
+    )
     args = parser.parse_args()
+    if args.contacts:
+        try:
+            fill_contacts(args.redo)
+        except KeyboardInterrupt:
+            print("\nStopped. Run it again to continue.")
+            return 1
+        return 0
     if args.score:
         score()
         return 0

@@ -1,0 +1,105 @@
+facility_id,name,address,city,state,zipcode,phone,email,website,facility_type,feedstock,latitude,longitude,source,dropoff_verified,contact_source
+13136,Best Buy,"8923 Bay Pkwy, Brooklyn, NY 11214",Brooklyn,NY,11214,(718) 265-6950,,https://stores.bestbuy.com/ny/brooklyn/8923-bay-pkwy-599.html,Electronics Drop-Off,Electronics,40.59360561,-73.99907225,NYC DSNY,True,osm
+13104,Recycle Your Devices,"1885 Victory Blvd, Staten Island, NY 10314",Staten Island,NY,10314,,,,Electronics Drop-Off,Electronics,40.61714326,-74.12507436,NYC DSNY,True,not_found
+13205,WE Pickups LLC,"432 Austin Place #408, Bronx, NY 10455",Bronx,NY,10455,,,,Electronics Drop-Off,Electronics,40.8090356,-73.9053482,NYC DSNY,True,not_found
+13117,Apple Store,"2655 Richmond Ave, Staten Island, NY 10314",Staten Island,NY,10314,(718) 568-2230,,https://www.apple.com/retail/statenisland/,Electronics Drop-Off,Electronics,40.58187,-74.165866,NYC DSNY,True,osm
+13200,Staples,"90-30 Metropolitan Ave, Queens, NY 11374",Queens,NY,11374,,,https://stores.staples.com/ny/rego-park/9030-metropolitan-ave-suite-3,Electronics Drop-Off,Electronics,40.71103454,-73.85841309,NYC DSNY,True,osm
+13195,Staples,"5-9 Union Square W, Manhattan, NY 10003",Manhattan,NY,10003,(212) 929-6323,,https://stores.staples.com/ny/new-york/5-union-square-west,Electronics Drop-Off,Electronics,40.7354498,-73.9915753,NYC DSNY,True,osm
+13149,Goodwill,"44 W 8 St, Manhattan, NY 10011",Manhattan,NY,10011,,,,Electronics Drop-Off,Electronics,40.732951,-73.998643,NYC DSNY,True,not_found
+13163,Salvation Army,"208 8 Ave, Manhattan, NY 10011",Manhattan,NY,10011,(212) 929-5214,,https://satruck.org,Electronics Drop-Off,Electronics,40.743678,-73.999235,NYC DSNY,True,osm
+13181,Staples,"251-21 Jericho Turnpike, Queens, NY 11426",Queens,NY,11426,,,https://stores.staples.com/ny/bellerose-(queens)/25121-jericho-turnpike-suite-b,Electronics Drop-Off,Electronics,40.72765982,-73.71333697,NYC DSNY,True,osm
+13168,Salvation Army,"6822 3 Ave, Brooklyn, NY 11220",Brooklyn,NY,11220,,,,Electronics Drop-Off,Electronics,40.6362001,-74.0260663,NYC DSNY,True,not_found
+13180,Staples,"24-41 31 St, Queens, NY 11102",Queens,NY,11102,,,https://stores.staples.com/ny/astoria/24-41-31st-street,Electronics Drop-Off,Electronics,40.77122118,-73.91629611,NYC DSNY,True,osm
+13153,J&J Recycling,"1641 Richmond Terrace, Staten Island, NY 10310",Staten Island,NY,10310,,,,Electronics Drop-Off,Electronics,40.6403145,-74.1212432,NYC DSNY,True,not_found
+13191,Staples,"5110 Broadway, Queens, NY 11377",Queens,NY,11377,,,https://stores.staples.com/ny/woodside/51-10-broadway,Electronics Drop-Off,Electronics,40.7538623,-73.9089981,NYC DSNY,True,osm
+13185,Staples,"348 4th Ave, Brooklyn, NY 11215",Brooklyn,NY,11215,(718) 222-5732,,https://stores.staples.com/ny/brooklyn/348-4th-avenue,Electronics Drop-Off,Electronics,40.67418233,-73.98677487,NYC DSNY,True,osm+website
+13159,Salvation Army,"436 Atlantic Ave, Brooklyn, NY 11217",Brooklyn,NY,11217,,,,Electronics Drop-Off,Electronics,40.6863101,-73.9838984,NYC DSNY,True,not_found
+13112,Apple Store,"123 Flatbush Ave, Brooklyn, NY 11217",Brooklyn,NY,11217,(718) 637-6200,,https://www.apple.com/retail/downtownbrooklyn/,Electronics Drop-Off,Electronics,40.686202,-73.978499,NYC DSNY,True,osm
+13148,Goodwill,"258 Livingston St, Brooklyn, NY 11201",Brooklyn,NY,11201,,,,Electronics Drop-Off,Electronics,40.6887457,-73.9842131,NYC DSNY,True,not_found
+13127,Best Buy,"369 Gateway Dr, Brooklyn, NY 11239",Brooklyn,NY,11239,(718) 348-2739,,https://stores.bestbuy.com/ny/brooklyn/369-gateway-dr-1886.html,Electronics Drop-Off,Electronics,40.65154222,-73.87262128,NYC DSNY,True,osm
+13176,Staples,"1885 Hylan Blvd, Staten Island, NY 10306",Staten Island,NY,10306,,,https://stores.staples.com/ny/staten-island/1885-hylan-blvd,Electronics Drop-Off,Electronics,40.5838147,-74.0962032,NYC DSNY,True,osm
+13121,Apple Store,"90-15 Queens Blvd, Queens, NY 11373",Queens,NY,11373,,,,Electronics Drop-Off,Electronics,40.734566,-73.870652,NYC DSNY,True,not_found
+13144,Goodwill,"103 W 25 St, Manhattan, NY 10001",Manhattan,NY,10001,(646) 638-1725,,https://www.goodwillnynj.org/,Electronics Drop-Off,Electronics,40.7444737,-73.9921732,NYC DSNY,True,osm
+13116,Apple Store,"247 Bedford Ave, Brooklyn, NY 11211",Brooklyn,NY,11211,(929) 397-2740,,https://www.apple.com/retail/williamsburg/,Electronics Drop-Off,Electronics,40.71561,-73.959746,NYC DSNY,True,osm
+13204,WALTER,"138 Hinsdale St, Brooklyn, NY 11207",Brooklyn,NY,11207,,,,Electronics Drop-Off,Electronics,40.67227998,-73.90107948,NYC DSNY,True,not_found
+13131,Best Buy,"531 5th Ave, Manhattan, NY 10017",Manhattan,NY,10017,(212) 808-0309,,https://stores.bestbuy.com/ny/new-york/531-5th-ave-1028.html,Electronics Drop-Off,Electronics,40.75483614,-73.97963772,NYC DSNY,True,osm
+13199,Staples,"800 Third Ave, Manhattan, NY 10022",Manhattan,NY,10022,,,,Electronics Drop-Off,Electronics,40.75570567,-73.97138626,NYC DSNY,True,not_found
+13145,Goodwill,"1114 1 Ave, Manhattan, NY 10065",Manhattan,NY,10065,(212) 355-5206,,https://www.goodwillnynj.org,Electronics Drop-Off,Electronics,40.760863,-73.960668,NYC DSNY,True,osm
+13120,Apple Store,"767 5 Ave, Manhattan, NY 10153",Manhattan,NY,10153,(212) 336-1440,,https://www.apple.com/retail/fifthavenue/,Electronics Drop-Off,Electronics,40.763609,-73.972435,NYC DSNY,True,osm
+13103,"Green Chip, Inc.","540 Kingland Ave, Brooklyn, NY 11222",Brooklyn,NY,11222,,,,Electronics Drop-Off,Electronics,40.73570942,-73.94439373,NYC DSNY,True,not_found
+13177,Staples,"2040 White Plains Rd, Bronx, NY 10462",Bronx,NY,10462,,,,Electronics Drop-Off,Electronics,40.85207672,-73.86737946,NYC DSNY,True,not_found
+13167,Salvation Army,"536 W 46 St, Manhattan, NY 10036",Manhattan,NY,10036,,,,Electronics Drop-Off,Electronics,40.762665,-73.995377,NYC DSNY,True,not_found
+13135,Best Buy,"8801 Queens Blvd, Queens, NY 11373",Queens,NY,11373,,,,Electronics Drop-Off,Electronics,40.7357438,-73.87448827,NYC DSNY,True,not_found
+13184,Staples,"330-340 Baychester Ave, Bronx, NY 10475",Bronx,NY,10475,,,https://stores.staples.com/ny/bronx/330-340-baychester-ave,Electronics Drop-Off,Electronics,40.86768776,-73.82893736,NYC DSNY,True,osm
+13172,Staples,"1280 Lexington Ave, Manhattan, NY 10028",Manhattan,NY,10028,(212) 426-6190,,https://stores.staples.com/ny/new-york/1280-lexington-ave,Electronics Drop-Off,Electronics,40.7798872,-73.9557037,NYC DSNY,True,osm
+13113,Apple Store,"185 Greenwich St, Manhattan, NY 10007",Manhattan,NY,10007,(646) 802-3800,,https://www.apple.com/retail/worldtradecenter/,Electronics Drop-Off,Electronics,40.711639,-74.012343,NYC DSNY,True,osm
+13140,DSNY Special Waste Drop-Off Site,"12015 31 Ave, Queens, NY 11354",Queens,NY,11354,,,,Electronics Drop-Off,Electronics,40.77123,-73.84757,NYC DSNY,True,not_found
+13108,"Scrap King Greenpoint, LLC","374 Greenpoint Ave, Brooklyn, NY 11222",Brooklyn,NY,11222,,,,Electronics Drop-Off,Electronics,40.7318987,-73.9443865,NYC DSNY,True,not_found
+13196,Staples,"641 6 Ave, Manhattan, NY 10011",Manhattan,NY,10011,(212) 462-2959,,https://stores.staples.com/ny/new-york/641-6th-ave,Electronics Drop-Off,Electronics,40.7407266,-73.9948313,NYC DSNY,True,osm
+13152,Irving Rubber & Metal Co,"9525 Ditmas Ave, Brooklyn, NY 11236",Brooklyn,NY,11236,,,,Electronics Drop-Off,Electronics,40.65102651,-73.91076274,NYC DSNY,True,not_found
+13128,Best Buy,"402 E Fordham Rd, Bronx, NY 10458",Bronx,NY,10458,(718) 329-8788,,https://stores.bestbuy.com/ny/bronx/402-e-fordham-rd-1891.html,Electronics Drop-Off,Electronics,40.86087263,-73.89167099,NYC DSNY,True,osm
+13109,Scrap King USA Inc,"99 19th St, Brooklyn, NY 11232",Brooklyn,NY,11232,(718) 768-2703,,,Electronics Drop-Off,Electronics,40.6655837,-73.9970059,NYC DSNY,True,osm
+13192,Staples,"535 Morgan Ave, Brooklyn, NY 11222",Brooklyn,NY,11222,,,,Electronics Drop-Off,Electronics,40.72230119,-73.93917165,NYC DSNY,True,not_found
+13164,Salvation Army,"2359 Jerome Ave, Bronx, NY 10468",Bronx,NY,10468,,,,Electronics Drop-Off,Electronics,40.860358,-73.9030775,NYC DSNY,True,not_found
+13132,Best Buy,"60 W 23 St, Manhattan, NY 10010",Manhattan,NY,10010,(212) 366-1373,,https://stores.bestbuy.com/482,Electronics Drop-Off,Electronics,40.7423606,-73.9923849,NYC DSNY,True,osm
+13203,"T&T Scrap, LLC","340 Maspeth Ave, Brooklyn, NY 11211",Brooklyn,NY,11211,,,,Electronics Drop-Off,Electronics,40.7180546,-73.9304626,NYC DSNY,True,not_found
+13173,Staples,"1755 Broadway, Manhattan, NY 10019",Manhattan,NY,10019,(212) 956-9210,,https://www.staples.com/stores?setstore=5311,Electronics Drop-Off,Electronics,40.766011,-73.98214997,NYC DSNY,True,osm
+13171,Staples,"105 W 125th St, Manhattan, NY 10027",Manhattan,NY,10027,(212) 864-5747,,https://stores.staples.com/ny/new-york/105-west-125th-st,Electronics Drop-Off,Electronics,40.80827765,-73.94594495,NYC DSNY,True,osm
+13160,Salvation Army,"493 Mosel Ave, Staten Island, NY 10304",Staten Island,NY,10304,,,,Electronics Drop-Off,Electronics,40.60521855,-74.0838506,NYC DSNY,True,not_found
+13141,DSNY Special Waste Drop-Off Site,"2 Farragut St, Bronx, NY 10474",Bronx,NY,10474,,,,Electronics Drop-Off,Electronics,40.801686,-73.87343,NYC DSNY,True,not_found
+13188,Staples,"442 5th Ave, Manhattan, NY 10018",Manhattan,NY,10018,,,,Electronics Drop-Off,Electronics,40.75198,-73.9824833,NYC DSNY,True,not_found
+13183,Staples,"2892 Ocean Ave, Brooklyn, NY 11235",Brooklyn,NY,11235,,,https://stores.staples.com/ny/brooklyn/2892-ocean-avenue,Electronics Drop-Off,Electronics,40.5908736,-73.9503307,NYC DSNY,True,osm
+13161,Salvation Army,"1294 Southern Blvd, Bronx, NY 10459",Bronx,NY,10459,,,,Electronics Drop-Off,Electronics,40.8306088,-73.891455,NYC DSNY,True,not_found
+13146,Goodwill,"1704 2 Ave, Manhattan, NY 10128",Manhattan,NY,10128,,,,Electronics Drop-Off,Electronics,40.7793,-73.950294,NYC DSNY,True,not_found
+13178,Staples,"209-34 Northern Blvd, Queens, NY 11361",Queens,NY,11361,(718) 229-0138,,https://stores.staples.com/ny/bayside/209-34-northern-blvd,Electronics Drop-Off,Electronics,40.75909625,-73.77302777,NYC DSNY,True,osm+website
+13134,Best Buy,"622 Broadway, Manhattan, NY 10012",Manhattan,NY,10012,(212) 673-4067,,https://stores.bestbuy.com/ny/new-york/622-broadway-609.html,Electronics Drop-Off,Electronics,40.7258471,-73.99621957,NYC DSNY,True,osm
+13193,Staples,"5680 Broadway, Bronx, NY 10463",Bronx,NY,10463,,,,Electronics Drop-Off,Electronics,40.88108777,-73.90227651,NYC DSNY,True,not_found
+13151,Goodwill,"7 W 14 St, Manhattan, NY 10011",Manhattan,NY,10011,(212) 206-1619,,https://www.goodwillnynj.org/,Electronics Drop-Off,Electronics,40.736697,-73.994165,NYC DSNY,True,osm
+13156,"PASCAP Co., Inc.","4250 Boston Rd, Bronx, NY 10475",Bronx,NY,10475,,,,Electronics Drop-Off,Electronics,40.8882201,-73.8225387,NYC DSNY,True,not_found
+13119,Apple Store,"45 Grand Central Terminal, Manhattan, NY 10017",Manhattan,NY,10017,(212) 284-1800,,https://www.apple.com/retail/grandcentral/,Electronics Drop-Off,Electronics,40.752642,-73.977279,NYC DSNY,True,osm
+13124,Best Buy,"13107 40th Rd, Queens, NY 11354",Queens,NY,11354,,,,Electronics Drop-Off,Electronics,40.75636718,-73.83696215,NYC DSNY,True,not_found
+13129,Best Buy,"5001 Northern Blvd, Queens, NY 11101",Queens,NY,11101,(718) 626-7585,,https://stores.bestbuy.com/ny/long-island-city/5001-northern-blvd-478.html,Electronics Drop-Off,Electronics,40.75370894,-73.9117397,NYC DSNY,True,osm
+13198,Staples,"769 Broadway, Manhattan, NY 10003",Manhattan,NY,10003,(646) 654-6660,,https://stores.staples.com/ny/new-york/769-broadway,Electronics Drop-Off,Electronics,40.73105907,-73.99228685,NYC DSNY,True,osm
+13166,Salvation Army,"4109 Park Ave, Bronx, NY 10457",Bronx,NY,10457,,,,Electronics Drop-Off,Electronics,40.845553,-73.901079,NYC DSNY,True,
+13107,Salvation Army,"208 E 23 St, Manhattan, NY 10010",Manhattan,NY,10010,,,,Electronics Drop-Off,Electronics,40.738365,-73.9824462,NYC DSNY,True,not_found
+13102,Gershow Recycling of Brooklyn Inc,"1188 Pitkin Ave, Brooklyn, NY 11212",Brooklyn,NY,11212,,,,Electronics Drop-Off,Electronics,40.67748108,-73.90292646,NYC DSNY,True,not_found
+13114,Apple Store,"1981 Broadway, Manhattan, NY 10023",Manhattan,NY,10023,(212) 209-3400,,https://www.apple.com/retail/upperwestside/,Electronics Drop-Off,Electronics,40.775064,-73.982637,NYC DSNY,True,osm
+13139,DSNY Special Waste Drop-Off Site,"1000 West Service Rd, Staten Island, NY 10312",Staten Island,NY,10312,,,,Electronics Drop-Off,Electronics,40.56899487,-74.19338812,NYC DSNY,True,not_found
+13202,Staples,"9319 5 Ave, Brooklyn, NY 11209",Brooklyn,NY,11209,,,https://stores.staples.com/ny/brooklyn/9319-5th-avenue,Electronics Drop-Off,Electronics,40.6166088,-74.0300263,NYC DSNY,True,osm
+13125,Best Buy,"171 W 230th St, Ste. 103, Bronx, NY 10463",Bronx,NY,10463,(718) 530-7720,,https://stores.bestbuy.com/ny/bronx/171-w-230th-st-1261.html,Electronics Drop-Off,Electronics,40.87728015,-73.90491584,NYC DSNY,True,osm
+13170,Sims Metal Management East,"850 Edgewater Rd, Bronx, NY 10474",Bronx,NY,10474,,,,Electronics Drop-Off,Electronics,40.8184516,-73.8832997,NYC DSNY,True,not_found
+13157,Salvation Army,"109 2nd Ave, Brooklyn, NY 11215",Brooklyn,NY,11215,(718) 622-7166,,,Electronics Drop-Off,Electronics,40.67144018,-73.9942085,NYC DSNY,True,osm
+13142,DSNY Special Waste Drop-Off Site,"459 N Henry St, Brooklyn, NY 11222",Brooklyn,NY,11222,,,,Electronics Drop-Off,Electronics,40.73476,-73.94543,NYC DSNY,True,not_found
+13187,Staples,"4320 Broadway, Manhattan, NY 10033",Manhattan,NY,10033,(212) 927-0467,,https://stores.staples.com/ny/new-york/4320-broadway-front-3,Electronics Drop-Off,Electronics,40.852234,-73.934259,NYC DSNY,True,osm+website
+13110,"Allocco Recycling, Ltd.","540 Kingsland Ave, Brooklyn, NY 11222",Brooklyn,NY,11222,,,,Electronics Drop-Off,Electronics,40.7355308,-73.9443812,NYC DSNY,True,not_found
+13155,Micro Center,"71-43 Kissena Blvd (Between 71st and 72nd Aves), Queens, NY 11367",Queens,NY,11367,(718) 674-8400,,https://www.microcenter.com/site/stores/flushing.aspx,Electronics Drop-Off,Electronics,40.728866,-73.8150369,NYC DSNY,True,osm
+13138,Big Reuse,"1 12th St, Brooklyn, NY 11215",Brooklyn,NY,11215,(718) 715-8925,brooklyn@bigreuse.org,https://bigreuse.org,Electronics Drop-Off,Electronics,40.6722888,-73.9971998,NYC DSNY,True,osm
+13189,Staples,"5 Union Square West, Manhattan, NY 10003",Manhattan,NY,10003,(212) 929-6323,,https://stores.staples.com/ny/new-york/5-union-square-west,Electronics Drop-Off,Electronics,40.73578828,-73.99179116,NYC DSNY,True,osm
+13174,Staples,"1760 Utica Ave, Brooklyn, NY 11234",Brooklyn,NY,11234,,,,Electronics Drop-Off,Electronics,40.62921082,-73.92835207,NYC DSNY,True,not_found
+13194,Staples,"58-12 Queens Blvd, Queens, NY 11377",Queens,NY,11377,,,https://stores.staples.com/ny/queens/58-12-queens-blvd-suite-2,Electronics Drop-Off,Electronics,40.74128698,-73.9070244,NYC DSNY,True,osm
+13133,Best Buy,"610 Exterior St, Bronx, NY 10451",Bronx,NY,10451,,,,Electronics Drop-Off,Electronics,40.82153924,-73.92977867,NYC DSNY,True,
+13162,Salvation Army,"2053 Clove Rd, Staten Island, NY 10304",Staten Island,NY,10304,,,,Electronics Drop-Off,Electronics,40.605057,-74.083695,NYC DSNY,True,not_found
+13106,PTK Restorations LLC,"59-20 Grand Ave, Queens, NY 11378",Queens,NY,11378,,,,Electronics Drop-Off,Electronics,40.720542,-73.907551,NYC DSNY,True,not_found
+13118,Apple Store,"401 W 14 St, Manhattan, NY 10014",Manhattan,NY,10014,(212) 444-3400,,https://www.apple.com/retail/west14thstreet/,Electronics Drop-Off,Electronics,40.741335,-74.00555,NYC DSNY,True,osm
+13165,Salvation Army,"3911 61 St, Queens, NY 11377",Queens,NY,11377,(800) 728-7825,,https://satruck.org,Electronics Drop-Off,Electronics,40.746743,-73.9026954,NYC DSNY,True,osm
+13179,Staples,"2248 Broadway, Manhattan, NY 10024",Manhattan,NY,10024,(212) 712-9617,,https://stores.staples.com/ny/new-york/2248-broadway,Electronics Drop-Off,Electronics,40.7848159,-73.9788032,NYC DSNY,True,osm
+13150,Goodwill,"4747 Van Dam St, Queens, NY 11101",Queens,NY,11101,(718) 392-0125,,https://goodwillnynj.org/locations/ny/VanDamSt/,Electronics Drop-Off,Electronics,40.7415286,-73.9337864,NYC DSNY,True,osm
+13182,Staples,"2535 Richmond Ave, Staten Island, NY 10314",Staten Island,NY,10314,,,,Electronics Drop-Off,Electronics,40.58605531,-74.16669338,NYC DSNY,True,not_found
+13197,Staples,"675 3 Ave, Manhattan, NY 10017",Manhattan,NY,10017,,,,Electronics Drop-Off,Electronics,40.7509006,-73.973911,NYC DSNY,True,not_found
+13130,Best Buy,"52 E 14th St, Manhattan, NY 10003",Manhattan,NY,10003,(212) 466-4789,,https://stores.bestbuy.com/ny/new-york/52-e-14th-st-1531.html,Electronics Drop-Off,Electronics,40.73451587,-73.99052633,NYC DSNY,True,osm
+13147,Goodwill,"2231 3 Ave, Manhattan, NY 10035",Manhattan,NY,10035,(212) 410-0973,,https://www.goodwillnynj.org,Electronics Drop-Off,Electronics,40.801328,-73.937068,NYC DSNY,True,osm
+13123,Best Buy,"1280 Lexington Ave, Manhattan, NY 10028",Manhattan,NY,10028,(917) 492-8870,,https://stores.bestbuy.com/ny/new-york/1280-lexington-ave-835.html,Electronics Drop-Off,Electronics,40.7798872,-73.9557037,NYC DSNY,True,osm
+13169,Scholes St Recycling Corp,"492 Scholes St, Brooklyn, NY 11237",Brooklyn,NY,11237,,,,Electronics Drop-Off,Electronics,40.71123455,-73.92767114,NYC DSNY,True,not_found
+13175,Staples,"1880 Coney Island Ave, Brooklyn, NY 11230",Brooklyn,NY,11230,,,,Electronics Drop-Off,Electronics,40.6118064,-73.9630824,NYC DSNY,True,
+13154,Micro Center,"850 3rd Ave (31st & 3rd Ave), Brooklyn, NY 11232",Brooklyn,NY,11232,(347) 563-9880,,https://www.microcenter.com/site/stores/brooklyn.aspx,Electronics Drop-Off,Electronics,40.6588044,-74.003448,NYC DSNY,True,osm
+13186,Staples,"409 Gateway Dr, Brooklyn, NY 11239",Brooklyn,NY,11239,,,,Electronics Drop-Off,Electronics,40.6539242,-73.8732584,NYC DSNY,True,not_found
+13201,Staples,"93-18 Roosevelt Ave, Queens, NY 11372",Queens,NY,11372,,,,Electronics Drop-Off,Electronics,40.74868912,-73.87263634,NYC DSNY,True,not_found
+13126,Best Buy,"2795 Richmond Ave, Staten Island, NY 10314",Staten Island,NY,10314,(718) 698-7546,,https://stores.bestbuy.com/ny/staten-island/2795-richmond-ave-469.html,Electronics Drop-Off,Electronics,40.57695637,-74.16738911,NYC DSNY,True,osm
+13111,Apple Store,"103 Prince St, Manhattan, NY 10012",Manhattan,NY,10012,(212) 226-3126,,https://www.apple.com/retail/soho/,Electronics Drop-Off,Electronics,40.725117,-73.998979,NYC DSNY,True,osm
+13158,Salvation Army,"4109 Park Ave, Bronx, NY 10457",Bronx,NY,10457,,,,Electronics Drop-Off,Electronics,40.84559331,-73.90103116,NYC DSNY,True,not_found
+13190,Staples,"500 8 Ave, Manhattan, NY 10018",Manhattan,NY,10018,(212) 244-2681,,https://stores.staples.com/ny/new-york/500-eighth-avenue-new-york,Electronics Drop-Off,Electronics,40.7530426,-73.9924445,NYC DSNY,True,osm
+13137,Best Buy,"625 Atlantic Ave, Brooklyn, NY 11217",Brooklyn,NY,11217,(718) 230-7480,,https://stores.bestbuy.com/ny/brooklyn/625-atlantic-ave-2518.html,Electronics Drop-Off,Electronics,40.6840997,-73.97548098,NYC DSNY,True,osm
+13143,DSNY Special Waste Drop-Off Site,"74 Pike Slip, Manhattan, NY 10002",Manhattan,NY,10002,,,https://www1.nyc.gov/assets/dsny/site/services/harmful-products/special-waste-drop-offs,Electronics Drop-Off,Electronics,40.71066,-73.99288,NYC DSNY,True,osm
+13115,Apple Store,"200 Baychester Avenue, Bronx, NY 10475",Bronx,NY,10475,,,,Electronics Drop-Off,Electronics,40.8638,-73.8278,NYC DSNY,True,not_found
+13122,Apple Store,"940 Madison Ave, Manhattan, NY 10021",Manhattan,NY,10021,(646) 343-2700,,https://www.apple.com/retail/uppereastside/,Electronics Drop-Off,Electronics,40.773375,-73.964538,NYC DSNY,True,osm
+13105,Lumens,"106-15 Sutphin Blvd, Queens, NY 11435",Queens,NY,11435,,,,Electronics Drop-Off,Electronics,40.6948931,-73.8023815,NYC DSNY,True,not_found

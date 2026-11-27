@@ -1,4 +1,4 @@
-"""Find the EPA-listed electronics recyclers within 10 miles of a US ZIP code.
+"""Find the NYC electronics drop-off sites within 10 miles of a ZIP code.
 
 Run:     python find_recyclers.py            (asks for a ZIP code)
          python find_recyclers.py 11220
@@ -19,11 +19,11 @@ from geopy.distance import geodesic
 # ewaste_locator is the name of both this folder and the download script, so the import depends
 # on whether this file is imported from the project root or run directly.
 if __package__:
-    from .ewaste_locator import CSV_FILE, download_facilities
+    from .ewaste_locator import CSV_FILE
 else:
-    from ewaste_locator import CSV_FILE, download_facilities
+    from ewaste_locator import CSV_FILE
 
-RADIUS_MILES = 10
+RADIUS_MILES = 5
 
 
 class LocatorError(Exception):
@@ -89,7 +89,6 @@ def read_facility(row):
         "url": clean_url(row["website"]),
         "latitude": float(row["latitude"]),
         "longitude": float(row["longitude"]),
-        "dropoff_verified": row["dropoff_verified"] == "True",
     }
 
 
@@ -117,14 +116,11 @@ def detail_count(facility):
 
 
 def load_facilities():
-    """Read the EPA CSV, downloading it first if it does not exist yet."""
+    """Read the NYC drop-off CSV. It is never downloaded from here: see ewaste_locator.py."""
     if not CSV_FILE.exists():
-        try:
-            download_facilities()
-        except (OSError, RuntimeError, ValueError) as exc:
-            raise LocatorError(f"The EPA data could not be downloaded: {exc}") from exc
-        if not CSV_FILE.exists():
-            raise LocatorError("The EPA returned no facilities. Please try again later.")
+        raise LocatorError(
+            "The NYC drop-off list is missing. Run python ewaste_locator/ewaste_locator.py first."
+        )
     with open(CSV_FILE, newline="", encoding="utf-8") as file:
         return merge_duplicates([read_facility(row) for row in csv.DictReader(file)])
 
@@ -155,7 +151,7 @@ def print_results(zip_code):
     where = f"within {RADIUS_MILES} miles of {normalize_zip(zip_code)} ({place})"
 
     if not results:
-        print(f"\nNo EPA-listed e-waste recyclers found {where}.")
+        print(f"\nNo NYC electronics drop-off sites found {where}.")
         return
 
     noun = "recycler" if len(results) == 1 else "recyclers"
@@ -166,9 +162,6 @@ def print_results(zip_code):
             if facility[field]:
                 print(f"   {facility[field]}")
         print()
-
-    if not all(facility["dropoff_verified"] for facility in results):
-        print("Public drop-off is not verified for these sites. Contact them before visiting.")
 
 
 def main():
