@@ -1,4 +1,4 @@
-"""Find the NYC electronics drop-off sites within 10 miles of a ZIP code.
+"""Find the NYC electronics drop-off sites within 5 miles of a ZIP code.
 
 Run:     python find_recyclers.py            (asks for a ZIP code)
          python find_recyclers.py 11220
