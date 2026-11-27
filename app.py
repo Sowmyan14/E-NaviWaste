@@ -58,15 +58,21 @@ WARNING_TEXT = {
 }
 
 USE_FAKES = os.environ.get("EC_USE_FAKES") == "1"
+RAM_CHECKPOINT = Path(CLASSIFIER_SRC).parent / "checkpoints" / "ram_plus_swin_large_14m.pth"
 
 
 @st.cache_resource(show_spinner=False)
 def get_classifier():
     """Load the models once and share them. The lock keeps it to one photo at a time."""
-    sets = list(FAKE_SETS) if USE_FAKES else []
-    # `baseline` is the vocabulary-prompted Grounding DINO pipeline. The default is now Grounded-SAM
-    # + RAM++, which needs the RAM++ checkpoint; switch this once that is installed.
-    return ElectronicsClassificationPipeline(presets=["baseline"], sets=sets), threading.Lock()
+    # No preset: the built-in config is the Grounded-SAM + RAM++ pipeline. The old
+    # vocabulary-prompted Grounding DINO pipeline is still available as presets=["baseline"].
+    if USE_FAKES:
+        sets = list(FAKE_SETS)
+    else:
+        # The config's checkpoint path is relative to the working directory, and Streamlit is
+        # started from the repo root, so point at the file absolutely.
+        sets = [f"pipeline.detector.params.ram_checkpoint={RAM_CHECKPOINT}"]
+    return ElectronicsClassificationPipeline(sets=sets), threading.Lock()
 
 
 # Keyed on the photo, so a rerun during a slow classification waits for it instead of repeating it.
