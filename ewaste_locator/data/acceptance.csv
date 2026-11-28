@@ -1,0 +1,25 @@
+match_type,match_value,Phone,Laptop,Tablet,Television,Router,Hard Drive,Smartwatch,Modem,Smart Speaker,Remote Control,Game Console,Monitor,Webcam,Camera,conditions,source_url,verified_on
+name,Staples,yes,yes,yes,yes,yes,yes,yes,yes,yes,,yes,yes,yes,yes,Television:max_size:49;Television:fee;limit:7,https://www.staples.com/stores/recycling,2026-11-27
+name,Best Buy,yes,yes,yes,yes,yes,yes,yes,yes,,yes,yes,yes,yes,yes,limit:10;residents_only;Laptop:limit:5;Television:limit:2;Television:fee;Television:own_brand_free;Television:max_size:50;Monitor:limit:2;Monitor:fee;Monitor:own_brand_free;Monitor:max_size:50;offers_data_wipe,https://www.bestbuy.com/site/services/recycling/pcmcat149900050025.c,2026-11-27
+name,Apple Store,yes,yes,yes,no,yes,yes,yes,,yes,,yes,yes,,,brand_only:trade_in,https://www.apple.com/recycling/recycler-guides/,2026-11-27
+name,Salvation Army,yes,yes,,yes,,,,,,,,,,,working_only;donation;Television:max_age:5,https://satruck.org/faq,2026-11-27
+name,Goodwill,yes,yes,,yes,,,,,,,,yes,,,working_only;donation,https://www.goodwillnynj.org/donate-goods/,2026-11-27
+name,DSNY Special Waste Drop-Off Site,yes,yes,yes,,,yes,,,,,yes,yes,,,,https://www.nyc.gov/site/dsny/collection/get-rid-of/electronics.page,2026-11-27
+name,Micro Center,yes,yes,yes,yes,,yes,yes,,,,yes,yes,yes,yes,offers_data_wipe,https://www.microcenter.com/product/693078/donation-recycling-conslt,2026-11-27
+name,"Allocco Recycling, Ltd.",,,,,,,,,,,,,,,,,
+name,Big Reuse,,,,,,,,,,,,,,,,,
+name,Gershow Recycling of Brooklyn Inc,,,,,,,,,,,,,,,,,
+name,"Green Chip, Inc.",,,,,,,,,,,,,,,,,
+name,Irving Rubber & Metal Co,,,,,,,,,,,,,,,,,
+name,J&J Recycling,,,,,,,,,,,,,,,,,
+name,Lumens,,,,,,,,,,,,,,,,,
+name,"PASCAP Co., Inc.",,,,,,,,,,,,,,,,,
+name,PTK Restorations LLC,,,,,,,,,,,,,,,,,
+name,Recycle Your Devices,,,,,,,,,,,,,,,,,
+name,Scholes St Recycling Corp,,,,,,,,,,,,,,,,,
+name,"Scrap King Greenpoint, LLC",,,,,,,,,,,,,,,,,
+name,Scrap King USA Inc,,,,,,,,,,,,,,,,,
+name,Sims Metal Management East,,,,,,,,,,,,,,,,,
+name,"T&T Scrap, LLC",,,,,,,,,,,,,,,,,
+name,WALTER,,,,,,,,,,,,,,,,,
+name,WE Pickups LLC,,,,,,,,,,,,,,,,,
