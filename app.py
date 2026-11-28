@@ -18,6 +18,7 @@ from electronics_classifier import ElectronicsClassificationPipeline
 from electronics_classifier.cli import FAKE_SETS, InputError, load_image
 from electronics_classifier.config import ConfigError
 from ewaste_locator.find_recyclers import (
+    DEVICES,
     RADIUS_MILES,
     LocatorError,
     find_recyclers,
@@ -28,10 +29,8 @@ pillow_heif.register_heif_opener()  # lets Pillow (and so load_image) read iPhon
 
 st.set_page_config(page_title="NavE-Waste", layout="wide")
 
-DEVICE_TYPES = [
-    "Phone", "Laptop", "Tablet", "Television", "Router", "Hard Drive", "Smartwatch", "Modem", "Smart Speaker",
-    "Remote Control", "Game Console", "Monitor", "Webcam", "Camera"
-]
+# The same list as the columns of acceptance.csv, so a chosen device can always be looked up.
+DEVICE_TYPES = list(DEVICES)
 
 # Classifier category -> DEVICE_TYPES entry. Categories that are not listed here (charger, cable,
 # "electronic device", ...) have no match, so the user picks the device.
@@ -99,7 +98,8 @@ def run_pipeline(device: str, zip_code: str) -> dict:
     # A failed search only affects the drop-off tab; the rest of the plan is still shown.
     dropoffs, dropoff_error = [], None
     try:
-        dropoffs = find_recyclers(zip_code)
+        # Sites that do not take the device are listed too, marked with a badge.
+        dropoffs = find_recyclers(zip_code, device, include_refused=True)
     except LocatorError as exc:
         dropoff_error = str(exc)
     return {
@@ -116,6 +116,32 @@ def run_pipeline(device: str, zip_code: str) -> dict:
         "dropoffs": dropoffs,
         "dropoff_error": dropoff_error,
     }
+
+
+STATUS_BADGE = {
+    "yes": ":green-badge[:material/check: Takes a {device}]",
+    "unknown": ":orange-badge[:material/call: Call ahead to confirm]",
+    "no": ":red-badge[:material/block: Does not take a {device}]",
+}
+
+
+def show_dropoff(d: dict, device: str):
+    """One site's card, with a badge that says whether the site takes the device."""
+    with st.container(border=True):
+        st.markdown(f"**{d['name']}**")
+        st.markdown(STATUS_BADGE[d["device_status"]].format(device=device))
+        st.write(f"{d['address']} · {d['distance_mi']} mi")
+        contact = [d["phone"], d["email"], f"[Website]({d['url']})" if d["url"] else ""]
+        contact = [c for c in contact if c]
+        if contact:
+            st.markdown(" · ".join(contact))
+        if d["accepted"]:
+            st.caption(f"Confirmed to take: {', '.join(d['accepted'])}")
+        for note in d["notes"]:
+            st.markdown(f"- {note}")
+        if d["policy_url"]:
+            checked = f" · checked {d['policy_checked']}" if d["policy_checked"] else ""
+            st.caption(f"[What they accept]({d['policy_url']}){checked}")
 
 st.title("NavE-Waste")
 st.caption("Upload an image of your old device to get safe wipe steps and nearby drop-off sites")
@@ -227,24 +253,23 @@ if result and image is not None:
  
     with tab_drop:
         dropoffs = result["dropoffs"]
+        device = result["device"].lower()
         area = f"within {RADIUS_MILES} miles of {result['zip_code']}"
+        confirmed = sum(d["device_status"] == "yes" for d in dropoffs)
         if result["dropoff_error"]:
             st.error(result["dropoff_error"])
         elif not dropoffs:
             st.info(f"No NYC electronics drop-off sites were found {area}.")
         else:
-            noun = "recycler" if len(dropoffs) == 1 else "recyclers"
-            st.write(f"{len(dropoffs)} e-waste {noun} {area}, nearest first:")
+            noun = "site" if len(dropoffs) == 1 else "sites"
+            st.write(f"{len(dropoffs)} {noun} {area}, nearest first. "
+                     f"{confirmed} {'is' if confirmed == 1 else 'are'} confirmed to take a {device}.")
+        # Every nearby site is listed; the badge on each card says whether it takes the device.
         for d in dropoffs:
-            with st.container(border=True):
-                st.markdown(f"**{d['name']}**")
-                st.write(f"{d['address']} · {d['distance_mi']} mi")
-                contact = [d["phone"], d["email"], f"[Website]({d['url']})" if d["url"] else ""]
-                contact = [c for c in contact if c]
-                if contact:
-                    st.markdown(" · ".join(contact))
+            show_dropoff(d, device)
         if dropoffs:
             st.caption("Waste facility location data sourced through Esri ArcGIS REST Services. " \
                        "Original data publishers are credited where available. " \
+                       "Accepted items are from each organization's own website and can change. " \
                        "Distances are straight-line miles from the center of "
                        "the ZIP code. Verify hours before visiting.")
